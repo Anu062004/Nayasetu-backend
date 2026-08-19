@@ -6,6 +6,12 @@ import { unavailableCaseStatus } from "../../../modules/interop/domain/case-stat
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
+import {
+  bookingStateResponseSchema,
+  matterCloseResponseSchema,
+  matterStatusResponseSchema,
+  providerSlotsResponseSchema,
+} from "../schemas/citizen/responses.js";
 import { parseBody } from "../validation.js";
 
 const bookingSchema = z.object({
@@ -47,11 +53,11 @@ async function bookingForUpdate(id: string, client: import("pg").PoolClient) {
 export async function registerSchedulingMatterRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>("/v1/providers/:id/slots", async (request) => {
     requireActor(request, ["CITIZEN", "OPERATOR", "PROVIDER", "INSTITUTION", "ADMIN"]);
-    return {
+    return providerSlotsResponseSchema.parse({
       providerId: request.params.id,
       availabilityPolicy: "NOT_CONFIGURED",
       slots: [],
-    };
+    });
   });
 
   app.post("/v1/bookings", async (request, reply) => {
@@ -103,7 +109,9 @@ export async function registerSchedulingMatterRoutes(app: FastifyInstance): Prom
       });
       return row;
     });
-    return reply.code(201).send({ bookingId: booking.id, status: "HELD" });
+    return reply
+      .code(201)
+      .send(bookingStateResponseSchema.parse({ bookingId: booking.id, status: "HELD" }));
   });
 
   app.post<{ Params: { id: string } }>("/v1/bookings/:id/accept", async (request) => {
@@ -175,7 +183,7 @@ export async function registerSchedulingMatterRoutes(app: FastifyInstance): Prom
         reasonCode: body.reasonCode,
         afterSummary: { status: "DECLINED" },
       });
-      return { bookingId: booking.id, status: "DECLINED" };
+      return bookingStateResponseSchema.parse({ bookingId: booking.id, status: "DECLINED" });
     });
   });
 
@@ -220,7 +228,7 @@ export async function registerSchedulingMatterRoutes(app: FastifyInstance): Prom
         reasonCode: body.reasonCode,
         afterSummary: { status: "CANCELLED" },
       });
-      return { bookingId: booking.id, status: "CANCELLED" };
+      return bookingStateResponseSchema.parse({ bookingId: booking.id, status: "CANCELLED" });
     });
   });
 
@@ -274,7 +282,7 @@ export async function registerSchedulingMatterRoutes(app: FastifyInstance): Prom
         reasonCode: body.closeReason,
         afterSummary: { status: "CLOSED", hasCnrPointer: Boolean(body.cnrNumber) },
       });
-      return { matterId: row.id, status: "CLOSED" };
+      return matterCloseResponseSchema.parse({ matterId: row.id, status: "CLOSED" });
     });
   });
 
@@ -309,13 +317,13 @@ export async function registerSchedulingMatterRoutes(app: FastifyInstance): Prom
         "No authorized live case-status adapter is supplied",
       );
     }
-    return {
+    return matterStatusResponseSchema.parse({
       matterId: row.id,
       matterStatus: row.status,
       caseStatus: unavailableCaseStatus(
         app.config.capabilities.caseStatus,
         app.config.ecourtsPublicUrl,
       ),
-    };
+    });
   });
 }

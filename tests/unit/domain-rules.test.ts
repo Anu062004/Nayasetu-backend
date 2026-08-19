@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { citizenProviderSummarySchema } from "../../src/interfaces/http/schemas/citizen/common.js";
 import { orderDirectoryCandidates } from "../../src/modules/allocation/domain/directory-order.js";
 import { decideVerificationTier } from "../../src/modules/credential/domain/tier.js";
 import { decideEligibility } from "../../src/modules/eligibility/domain/route.js";
@@ -11,6 +12,18 @@ import {
 import { maySetProviderConfirmedPaymentState } from "../../src/modules/settlement/domain/payment-evidence.js";
 
 describe("blueprint domain invariants", () => {
+  it("rejects extra fields at the citizen provider DTO boundary", () => {
+    const result = citizenProviderSummarySchema.safeParse({
+      providerId: "00000000-0000-4000-8000-000000000001",
+      displayName: "Fixture provider",
+      tier: "SELF_DECLARED",
+      feeRange: [0, 0],
+      languages: ["TEST_LANGUAGE"],
+      nextSlot: null,
+      creditBalance: 1,
+    });
+    expect(result.success).toBe(false);
+  });
   it("does not allow unavailable or mock-only evidence to produce FULLY_VERIFIED", () => {
     const base = {
       checkType: "ENROLMENT",

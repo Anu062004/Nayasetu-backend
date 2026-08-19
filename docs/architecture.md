@@ -33,7 +33,8 @@ live adapter implementations will be added as those application contracts stabil
 - `admin`: review and operational workflows; no citizen-facing reuse of internal DTOs.
 
 Routes map database rows to allowlisted response objects. Citizen/provider/institutional schema
-namespaces are separate; complete runtime response-schema binding remains an implementation gate.
+namespaces are separate. Citizen-success responses pass through strict runtime schemas, while full
+provider and institutional response-schema binding remains an implementation gate.
 
 ## Data boundaries
 

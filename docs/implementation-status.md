@@ -20,13 +20,12 @@
   the runtime role cannot directly insert events or mutate balances.
 - Fail-closed case-status, credential, public-statistics, online-payment, and offline-ack behavior
   when required contracts or policies are absent.
-- Role-separated DTO namespaces plus a static citizen-response guardrail over citizen schemas and
-  the citizen route modules.
+- Strict runtime citizen-response schemas plus a static guardrail over those schemas and the
+  citizen route modules; unknown response fields are rejected before serialization.
 
 ## In progress
 
 - Real PostgreSQL migration verification and the required concurrency suites.
-- Runtime-bound response schemas for every citizen route.
 - Credential tier persistence, current-authority revalidation worker, and manual-review workflow.
 - Complete booking availability/hold-expiry and both-party closure policy.
 - Live adapter implementations after authorized partner contracts are supplied.

@@ -9,6 +9,12 @@ import { redactIntakeNarrative } from "../../../modules/intake/domain/redact.js"
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
+import {
+  allocationResponseSchema,
+  directoryResponseSchema,
+  needCreatedResponseSchema,
+  referralResponseSchema,
+} from "../schemas/citizen/responses.js";
 import { parseBody } from "../validation.js";
 
 const needSchema = z.object({
@@ -145,11 +151,13 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
       });
       return row;
     });
-    return reply.code(201).send({
-      requestId: result.id,
-      route: decision.route,
-      createdAt: result.created_at.toISOString(),
-    });
+    return reply.code(201).send(
+      needCreatedResponseSchema.parse({
+        requestId: result.id,
+        route: decision.route,
+        createdAt: result.created_at.toISOString(),
+      }),
+    );
   });
 
   app.get<{ Params: { id: string } }>("/v1/needs/:id/referral", async (request) => {
@@ -164,7 +172,11 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
     await assertCitizenAuthority(app.db, actor, need.citizen_user_id);
     if (need.route === "PAID")
       throw new AppError(409, "REFERRAL_NOT_APPLICABLE", "Request is routed to paid directory");
-    return { requestId: need.id, route: need.route, status: "REFERRAL_REQUIRED" };
+    return referralResponseSchema.parse({
+      requestId: need.id,
+      route: need.route,
+      status: "REFERRAL_REQUIRED",
+    });
   });
 
   app.get<{ Params: { id: string }; Querystring: unknown }>(
@@ -323,7 +335,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
         });
       });
 
-      return {
+      return directoryResponseSchema.parse({
         requestId: need.id,
         filterSummary: {
           category: need.taxonomy_code,
@@ -342,7 +354,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
         })),
         ordering: "ROTATED",
         seed: need.id,
-      };
+      });
     },
   );
 
@@ -390,7 +402,9 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
       });
       return allocation;
     });
-    return reply.code(201).send({ allocationId: result.id, mode: "CITIZEN_CHOICE" });
+    return reply
+      .code(201)
+      .send(allocationResponseSchema.parse({ allocationId: result.id, mode: "CITIZEN_CHOICE" }));
   });
 
   app.post<{ Params: { id: string } }>("/v1/needs/:id/rotate", async (request, reply) => {
@@ -483,8 +497,12 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
       });
       return { ...row, providerId: selected.provider_id };
     });
-    return reply
-      .code(201)
-      .send({ allocationId: allocation.id, providerId: allocation.providerId, mode: "ROTATION" });
+    return reply.code(201).send(
+      allocationResponseSchema.parse({
+        allocationId: allocation.id,
+        providerId: allocation.providerId,
+        mode: "ROTATION",
+      }),
+    );
   });
 }

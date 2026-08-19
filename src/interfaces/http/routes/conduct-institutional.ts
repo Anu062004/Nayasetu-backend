@@ -7,6 +7,7 @@ import { assertInstitutionalRosterGrant } from "../../../modules/identity/applic
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
+import { grievanceSubmissionResponseSchema } from "../schemas/citizen/responses.js";
 import { parseBody } from "../validation.js";
 
 const grievanceSchema = z.object({
@@ -44,11 +45,13 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
       });
       return row;
     });
-    return reply.code(201).send({
-      submissionId: grievance.id,
-      status: "OPEN",
-      openedAt: grievance.opened_at.toISOString(),
-    });
+    return reply.code(201).send(
+      grievanceSubmissionResponseSchema.parse({
+        submissionId: grievance.id,
+        status: "OPEN",
+        openedAt: grievance.opened_at.toISOString(),
+      }),
+    );
   });
 
   app.get<{ Params: { id: string } }>("/v1/institutional/providers/:id/record", async (request) => {

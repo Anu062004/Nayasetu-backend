@@ -8,6 +8,7 @@ import type { DatabaseClient } from "../../../shared/database.js";
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
+import { paymentStatusResponseSchema } from "../schemas/citizen/responses.js";
 import { parseBody } from "../validation.js";
 
 const redemptionSchema = z.object({ kind: z.enum(redemptionKinds) });
@@ -118,12 +119,12 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
     );
     const row = balance.rows[0];
     if (!row) throw new AppError(404, "CREDIT_BALANCE_NOT_FOUND", "Credit balance was not found");
-    return {
+    return paymentStatusResponseSchema.parse({
       providerId,
       totalCredits: Number(row.total_credits),
       periodCredits: Number(row.period_credits),
       lastEventId: row.last_event_id,
-    };
+    });
   });
 
   app.post("/v1/me/redemptions", async (request, reply) => {

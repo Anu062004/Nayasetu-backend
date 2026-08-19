@@ -17,7 +17,8 @@ source blueprint.
 
 ## CI guardrails
 
-- Citizen-facing DTOs reject score/rank/rating/recommendation and any credit/conduct/grievance data.
+- Strict citizen-facing DTOs and the CI source guard reject score/rank/rating/recommendation and
+  any credit/conduct/grievance data.
 - Schema tests reject privileged-content and client-wallet storage.
 - Contract tests prove `MOCK`, `OFF`, and `UNAVAILABLE` outcomes cannot become official success.
 - Real-PostgreSQL concurrency tests for rotation, booking, ledger, and webhook idempotency remain a
