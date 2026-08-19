@@ -96,6 +96,18 @@ describe("HTTP foundation", () => {
     expect(() => testConfig({ AUTH_MODE: "SESSION", SESSION_TOKEN_PEPPER: "too-short" })).toThrow(
       "SESSION_TOKEN_PEPPER must contain at least 32 characters",
     );
+    expect(() =>
+      testConfig({
+        NODE_ENV: "production",
+        AUTH_MODE: "SESSION",
+        SESSION_TOKEN_PEPPER: "0123456789abcdef0123456789abcdef",
+      }),
+    ).toThrow("Production startup requires DATABASE_EXPECTED_USER");
+  });
+
+  it("rejects zero-day freshness and zero-cell privacy thresholds", () => {
+    expect(() => testConfig({ CREDENTIAL_FRESHNESS_DAYS: "0" })).toThrow();
+    expect(() => testConfig({ PUBLIC_STATS_MIN_CELL_SIZE: "0" })).toThrow();
   });
 
   it("resolves a scoped actor from an opaque database session", async () => {
@@ -133,6 +145,41 @@ describe("HTTP foundation", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ availabilityPolicy: "NOT_CONFIGURED" });
+    await app.close();
+  });
+
+  it("returns the provider credit DTO from the credits endpoint", async () => {
+    const providerId = "00000000-0000-4000-8000-000000000002";
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes("FROM provider WHERE user_id")) {
+          return { rows: [{ id: providerId }], rowCount: 1 };
+        }
+        if (sql.includes("FROM credit_balance")) {
+          return {
+            rows: [{ total_credits: "12.5", period_credits: "2.5", last_event_id: "42" }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+    const app = await buildApp({ config: testConfig(), pool });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/me/credits",
+      headers: {
+        "x-actor-id": "00000000-0000-4000-8000-000000000001",
+        "x-actor-role": "PROVIDER",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      providerId,
+      totalCredits: 12.5,
+      periodCredits: 2.5,
+      lastEventId: "42",
+    });
     await app.close();
   });
 });

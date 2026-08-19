@@ -21,17 +21,22 @@ contracts are explicit validated gaps, not synthetic production facts.
 - External integrations behind capability-mode adapters.
 - Citizen, provider, institutional, and admin response schemas are isolated.
 
-See [docs/architecture.md](docs/architecture.md), [docs/blueprint-traceability.md](docs/blueprint-traceability.md),
-and [docs/decisions/0001-initial-architecture.md](docs/decisions/0001-initial-architecture.md).
+See [docs/architecture.md](docs/architecture.md),
+[docs/blueprint-traceability.md](docs/blueprint-traceability.md),
+[docs/testing.md](docs/testing.md), and
+[docs/decisions/0001-initial-architecture.md](docs/decisions/0001-initial-architecture.md).
 
 ## Local setup
 
-1. Copy `.env.example` to `.env` and replace development credentials.
-2. Start a PostgreSQL instance and set `DATABASE_URL`. Docker Compose is optional; it is not
-   required by the application.
+1. Copy `.env.example` to `.env` and replace both owner and runtime credentials.
+2. Start a PostgreSQL instance. `MIGRATION_DATABASE_URL` must use the schema owner;
+   `DATABASE_URL` must use the distinct non-owner application login. Docker Compose is optional;
+   it is not required by the application.
 3. Install dependencies: `npm install`.
 4. Apply migrations: `npm run db:migrate`.
-5. Start the API: `npm run dev`.
+5. Create/grant the runtime login: `npm run db:apply-runtime-role`.
+6. Verify the database boundary: `npm run db:verify`.
+7. Start the API: `npm run dev`.
 
 Health endpoints:
 
@@ -65,9 +70,12 @@ blocker for end-user login.
 
 ## Verification
 
-Run `npm run verify`. Database integration checks require `DATABASE_URL` and a real PostgreSQL
-instance. Full concurrent rotation, booking, ledger, and webhook tests remain required before a
-production release; they were not run locally during the no-Docker implementation pass.
+Run `npm run verify`. Database integration checks require `DATABASE_URL`,
+`MIGRATION_DATABASE_URL`, and a real PostgreSQL instance. Prepare that database with
+`npm run db:migrate`, apply the least-privilege role with
+`npm run db:apply-runtime-role`, then run `npm run db:verify` and `npm test`. No Docker-based
+verification is required. See [docs/testing.md](docs/testing.md) for the current coverage and
+remaining release gates.
 
 ## Non-negotiable boundaries
 
@@ -77,3 +85,5 @@ production release; they were not run locally during the no-Docker implementatio
 - No raw intake narrative after request completion.
 - No client-funds wallet, generic escrow, or platform custody.
 - No mock, `OFF`, or `UNAVAILABLE` adapter outcome becomes a successful official verification.
+- The API/worker database login is a non-owner member of `legal_service_runtime`; production
+  startup fails when the configured identity does not match that boundary.

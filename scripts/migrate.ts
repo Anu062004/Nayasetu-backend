@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import "dotenv/config";
 import { Client } from "pg";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL is required");
+const databaseUrl = process.env.MIGRATION_DATABASE_URL;
+if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required");
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const migrationsDirectory = path.join(repositoryRoot, "db", "migrations");

@@ -2,7 +2,7 @@
 
 ## Implemented
 
-- Professional repository/tooling baseline, CI, ordered SQL migrations, structured errors, and
+- Professional repository/tooling baseline, ordered SQL migrations, structured errors, and
   capability documentation.
 - PostgreSQL contract for identity/delegation, providers/verification, intake/eligibility,
   allocation/directory replay, scheduling/matters, external payment references, ledger,
@@ -18,10 +18,17 @@
 - Booking exclusion constraint and allocation lifecycle release on decline/cancel/closure.
 - Security-definer ledger append that atomically writes the event, balance, chain head, and audit;
   the runtime role cannot directly insert events or mutate balances.
+- Separate migration-owner and application-runtime database identities with startup and deployment
+  verification of membership, ownership, and critical privileges.
 - Fail-closed case-status, credential, public-statistics, online-payment, and offline-ack behavior
   when required contracts or policies are absent.
 - Strict runtime citizen-response schemas plus a static guardrail over those schemas and the
   citizen route modules; unknown response fields are rejected before serialization.
+- Strict runtime provider and institutional response schemas with explicit database-row mapping.
+- Grievance transitions enforced in both the domain model and PostgreSQL: `OPEN -> TRIAGED`, then
+  one of the three blueprint terminal outcomes.
+- Database-gated tests for concurrent allocation/booking, audited ledger reconciliation,
+  compensating entries, runtime-role denial, and append-only triggers.
 
 ## In progress
 
@@ -46,6 +53,7 @@ These gaps are deployment blockers or fail-closed capability states, not hidden 
 
 ## Verification note
 
-Local verification intentionally excludes real-PostgreSQL and concurrency execution because the
-implementation session was instructed not to use Docker. CI is configured with PostgreSQL and will
-apply both migrations, but concurrency coverage still needs to be implemented before release.
+Local verification intentionally excludes real-PostgreSQL execution because the implementation
+session was instructed not to use Docker and no external `DATABASE_URL` was supplied. The database
+tests are executable after migrations and runtime-login grants are applied. GitHub workflow
+automation is intentionally absent by project request; verification is command-driven.

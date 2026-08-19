@@ -13,6 +13,12 @@ import type { DatabaseClient } from "../../../shared/database.js";
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
+import {
+  credentialUploadResponseSchema,
+  issuerFetchResponseSchema,
+  providerCreatedResponseSchema,
+  providerVerificationResponseSchema,
+} from "../schemas/provider/responses.js";
 import { parseBody } from "../validation.js";
 
 const delegationSchema = z.object({
@@ -207,11 +213,13 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
       });
       return row;
     });
-    return reply.code(201).send({
-      providerId: provider.id,
-      tier: "SELF_DECLARED",
-      status: app.config.providerInitialStatus,
-    });
+    return reply.code(201).send(
+      providerCreatedResponseSchema.parse({
+        providerId: provider.id,
+        tier: "SELF_DECLARED",
+        status: app.config.providerInitialStatus,
+      }),
+    );
   });
 
   app.post<{ Params: { id: string } }>(
@@ -254,13 +262,15 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
         });
         return row;
       });
-      return reply.code(202).send({
-        verificationCaseId: result.id,
-        status: "REVIEW_REQUIRED",
-        sourceMode: configuredMode,
-        result: "UNAVAILABLE",
-        demoOnly: configuredMode === "MOCK",
-      });
+      return reply.code(202).send(
+        issuerFetchResponseSchema.parse({
+          verificationCaseId: result.id,
+          status: "REVIEW_REQUIRED",
+          sourceMode: configuredMode,
+          result: "UNAVAILABLE",
+          demoOnly: configuredMode === "MOCK",
+        }),
+      );
     },
   );
 
@@ -299,7 +309,12 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
           });
           return row;
         });
-        return reply.code(202).send({ verificationCaseId: result.id, status: "REVIEW_REQUIRED" });
+        return reply.code(202).send(
+          credentialUploadResponseSchema.parse({
+            verificationCaseId: result.id,
+            status: "REVIEW_REQUIRED",
+          }),
+        );
       } finally {
         if (!deleted) await deleteTemporaryFile(tempPath);
       }
@@ -357,13 +372,13 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
             return verification;
           })
         : await readVerification(app.db);
-    return {
+    return providerVerificationResponseSchema.parse({
       verificationCaseId: row.id,
       status: row.status,
       tierOutcome: row.tier_outcome,
       submittedAt: row.submitted_at.toISOString(),
       decidedAt: row.decided_at?.toISOString() ?? null,
       checks: row.checks,
-    };
+    });
   });
 }

@@ -8,6 +8,11 @@ import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
 import { grievanceSubmissionResponseSchema } from "../schemas/citizen/responses.js";
+import {
+  institutionalProviderRecordSchema,
+  institutionalRosterResponseSchema,
+  publicStatsResponseSchema,
+} from "../schemas/institutional/responses.js";
 import { parseBody } from "../validation.js";
 
 const grievanceSchema = z.object({
@@ -87,13 +92,13 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
         entityId: row.provider_id,
         reasonCode: consentRef,
       });
-      return {
+      return institutionalProviderRecordSchema.parse({
         providerId: row.provider_id,
         tier: row.tier,
         serviceCredits: Number(row.total_credits),
         objectiveSignals: row.objective_signals,
         consentRef,
-      };
+      });
     });
   });
 
@@ -119,14 +124,14 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
     );
     const row = roster.rows[0];
     if (!row) throw new AppError(404, "ROSTER_NOT_FOUND", "Roster was not found");
-    return {
+    return institutionalRosterResponseSchema.parse({
       rosterId: row.id,
       district: row.district,
       taxonomyCode: row.taxonomy_code,
       providerType: row.provider_type,
       mode: row.mode,
       members: row.members,
-    };
+    });
   });
 
   app.get("/v1/public/stats", async () => {
@@ -156,7 +161,7 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
                 'PLATFORM_RESOLVED','REFERRED_TO_BAR_COUNCIL','REFERRED_TO_DLSA'
               ))::text AS resolved FROM grievance`,
     );
-    return {
+    return publicStatsResponseSchema.parse({
       mattersServedByDistrict: districtMatters.rows.map((row) => ({
         district: row.district,
         mattersServed: Number(row.matters_served),
@@ -170,6 +175,6 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
             }
           : null,
       privacyMinimumCellSize: minimumCellSize,
-    };
+    });
   });
 }

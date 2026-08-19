@@ -33,14 +33,17 @@ live adapter implementations will be added as those application contracts stabil
 - `admin`: review and operational workflows; no citizen-facing reuse of internal DTOs.
 
 Routes map database rows to allowlisted response objects. Citizen/provider/institutional schema
-namespaces are separate. Citizen-success responses pass through strict runtime schemas, while full
-provider and institutional response-schema binding remains an implementation gate.
+namespaces are separate, and successful responses pass through strict runtime schemas.
 
 ## Data boundaries
 
 PostgreSQL is authoritative. The schema intentionally has no rating, rank, portfolio, case-content,
 or client-wallet table. `need_request` has no narrative column and `matter` stores metadata only.
 External documents are processed ephemerally and only verification facts/references may persist.
+
+The schema owner is used only through `MIGRATION_DATABASE_URL`. API and worker processes use the
+distinct `legal_service_app` login through `DATABASE_URL`; startup verifies that it inherits the
+`legal_service_runtime` grants and owns none of the protected ledger, audit, or migration tables.
 
 ## External capabilities
 

@@ -10,6 +10,12 @@ const hardeningMigrationPath = path.join(
   "migrations",
   "002_integrity_hardening.sql",
 );
+const grievanceMigrationPath = path.join(
+  repositoryRoot,
+  "db",
+  "migrations",
+  "003_grievance_state_machine.sql",
+);
 const runtimeRolePath = path.join(repositoryRoot, "db", "roles", "runtime.sql");
 
 describe("static blueprint storage boundaries", () => {
@@ -41,6 +47,7 @@ describe("static blueprint storage boundaries", () => {
     const runtimeRole = await readFile(runtimeRolePath, "utf8");
     expect(runtimeRole).toContain("REVOKE INSERT ON credit_event");
     expect(runtimeRole).toContain("REVOKE UPDATE, DELETE, TRUNCATE ON credit_balance");
+    expect(runtimeRole).toContain("REVOKE ALL ON schema_migration");
     expect(runtimeRole).toContain("GRANT EXECUTE ON FUNCTION append_credit_event");
     expect(hardening).toContain("'credit_event.appended', 'credit_event'");
     expect(hardening).toContain("INSERT INTO public.audit_event");
@@ -52,5 +59,12 @@ describe("static blueprint storage boundaries", () => {
     expect(sessionDefinition).toBeDefined();
     expect(sessionDefinition).toContain("token_digest bytea");
     expect(sessionDefinition).not.toMatch(/token_plain|raw_token|bearer_token/);
+  });
+
+  it("enforces the grievance path in PostgreSQL", async () => {
+    const grievanceMigration = await readFile(grievanceMigrationPath, "utf8");
+    expect(grievanceMigration).toContain("OLD.status = 'OPEN' AND NEW.status = 'TRIAGED'");
+    expect(grievanceMigration).toContain("OLD.status = 'TRIAGED' AND NEW.status IN");
+    expect(grievanceMigration).toContain("CREATE TRIGGER grievance_status_transition");
   });
 });

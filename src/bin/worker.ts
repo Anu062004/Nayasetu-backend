@@ -1,9 +1,10 @@
 import "dotenv/config";
 import { loadConfig } from "../app/config.js";
-import { createPool } from "../shared/database.js";
+import { assertDatabaseRuntimeIdentity, createPool } from "../shared/database.js";
 
 const config = loadConfig();
 const pool = createPool(config);
+await assertDatabaseRuntimeIdentity(pool, config.databaseExpectedUser);
 
 // Worker policies (credential freshness windows and notification delivery) are not supplied by the
 // blueprint. Keep the process healthy without inventing policy-driven mutations.

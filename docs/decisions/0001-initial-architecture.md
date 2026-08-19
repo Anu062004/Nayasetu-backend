@@ -40,6 +40,11 @@ Opaque session tokens are stored only as keyed SHA-256 HMAC digests. Header auth
 development-only, and production startup requires session mode. A live OTP adapter is still needed
 to issue end-user sessions.
 
+Database deployment uses separate identities. `MIGRATION_DATABASE_URL` is the schema owner;
+`DATABASE_URL` is the non-owner `legal_service_app` login inheriting the NOLOGIN
+`legal_service_runtime` role. API and worker startup reject an unexpected login, missing
+membership, or ownership of protected tables.
+
 Institutional provider access requires a time-limited consent record bound to institution,
 provider, scope, and consent reference. Institutional roster access additionally requires a
 time-limited roster-specific grant. Provisioning those records is deferred because the blueprint

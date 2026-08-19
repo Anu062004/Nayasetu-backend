@@ -3,12 +3,19 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../../modules/audit/application/write-audit.js";
 import { assertCitizenAuthority } from "../../../modules/identity/application/assert-citizen-authority.js";
+import type { RedemptionKind } from "../../../modules/redemption/domain/kinds.js";
 import { evidenceDisclaimer, redemptionKinds } from "../../../modules/redemption/domain/kinds.js";
 import type { DatabaseClient } from "../../../shared/database.js";
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
 import { paymentStatusResponseSchema } from "../schemas/citizen/responses.js";
+import {
+  paymentQuoteResponseSchema,
+  providerCreditSummarySchema,
+  redemptionResponseSchema,
+  signedEvidenceResponseSchema,
+} from "../schemas/provider/responses.js";
 import { parseBody } from "../validation.js";
 
 const redemptionSchema = z.object({ kind: z.enum(redemptionKinds) });
@@ -62,7 +69,7 @@ async function providerIdForActor(app: FastifyInstance, actorId: string): Promis
   return row.id;
 }
 
-async function evidencePayload(app: FastifyInstance, providerId: string, kind: string) {
+async function evidencePayload(app: FastifyInstance, providerId: string, kind: RedemptionKind) {
   const events = await app.db.query<{
     id: string;
     event_type: string;
@@ -82,7 +89,7 @@ async function evidencePayload(app: FastifyInstance, providerId: string, kind: s
     kind,
     providerId,
     issuedAt: new Date().toISOString(),
-    disclaimer: evidenceDisclaimer(kind as (typeof redemptionKinds)[number]),
+    disclaimer: evidenceDisclaimer(kind),
     events: events.rows.map((event) => ({
       id: event.id,
       eventType: event.event_type,
@@ -119,7 +126,7 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
     );
     const row = balance.rows[0];
     if (!row) throw new AppError(404, "CREDIT_BALANCE_NOT_FOUND", "Credit balance was not found");
-    return paymentStatusResponseSchema.parse({
+    return providerCreditSummarySchema.parse({
       providerId,
       totalCredits: Number(row.total_credits),
       periodCredits: Number(row.period_credits),
@@ -153,24 +160,28 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
       });
       return row;
     });
-    return reply.code(201).send({
-      redemptionId: redemption.id,
-      issuedAt: redemption.issued_at.toISOString(),
-      ...signed,
-    });
+    return reply.code(201).send(
+      redemptionResponseSchema.parse({
+        redemptionId: redemption.id,
+        issuedAt: redemption.issued_at.toISOString(),
+        ...signed,
+      }),
+    );
   });
 
   app.get("/v1/me/service-record", async (request) => {
     const actor = requireActor(request, ["PROVIDER"]);
     if (!app.config.evidenceSigningSecret)
       throw new AppError(503, "SIGNING_NOT_CONFIGURED", "Evidence signing is not configured");
-    return signEvidence(
-      await evidencePayload(
-        app,
-        await providerIdForActor(app, actor.actorId),
-        "SERVICE_RECORD_EXPORT",
+    return signedEvidenceResponseSchema.parse(
+      signEvidence(
+        await evidencePayload(
+          app,
+          await providerIdForActor(app, actor.actorId),
+          "SERVICE_RECORD_EXPORT",
+        ),
+        app.config.evidenceSigningSecret,
       ),
-      app.config.evidenceSigningSecret,
     );
   });
 
@@ -178,13 +189,15 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
     const actor = requireActor(request, ["PROVIDER"]);
     if (!app.config.evidenceSigningSecret)
       throw new AppError(503, "SIGNING_NOT_CONFIGURED", "Evidence signing is not configured");
-    return signEvidence(
-      await evidencePayload(
-        app,
-        await providerIdForActor(app, actor.actorId),
-        "PANEL_APPLICATION_EVIDENCE_PACKET",
+    return signedEvidenceResponseSchema.parse(
+      signEvidence(
+        await evidencePayload(
+          app,
+          await providerIdForActor(app, actor.actorId),
+          "PANEL_APPLICATION_EVIDENCE_PACKET",
+        ),
+        app.config.evidenceSigningSecret,
       ),
-      app.config.evidenceSigningSecret,
     );
   });
 
@@ -251,12 +264,14 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
       });
       return inserted;
     });
-    return reply.code(201).send({
-      quoteId: quote.id,
-      amount: body.amount,
-      currency: body.currency,
-      feeBreakdown: body.feeBreakdown,
-    });
+    return reply.code(201).send(
+      paymentQuoteResponseSchema.parse({
+        quoteId: quote.id,
+        amount: body.amount,
+        currency: body.currency,
+        feeBreakdown: body.feeBreakdown,
+      }),
+    );
   });
 
   app.post("/v1/payments/intents", async (request) => {
@@ -291,7 +306,7 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
     const row = result.rows[0];
     if (!row) throw new AppError(404, "PAYMENT_NOT_FOUND", "Payment intent was not found");
     await assertMatterAccess(app.db, actor, row.matter_id);
-    return {
+    return paymentStatusResponseSchema.parse({
       paymentId: row.id,
       matterId: row.matter_id,
       paymentProvider: row.payment_provider,
@@ -300,7 +315,7 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
       status: row.status,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
-    };
+    });
   });
 
   app.post<{ Params: { provider: string } }>("/v1/payments/webhooks/:provider", async () => {

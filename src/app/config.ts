@@ -1,9 +1,12 @@
 import { z } from "zod";
 
 const mode = z.enum(["LIVE", "MOCK", "OFF"]);
-const optionalIntegerString = z.preprocess(
+const optionalPositiveIntegerString = z.preprocess(
   (value) => (value === "" ? undefined : value),
-  z.string().regex(/^\d+$/).optional(),
+  z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .optional(),
 );
 const optionalNonEmptyString = z.preprocess(
   (value) => (value === "" ? undefined : value),
@@ -15,6 +18,7 @@ const environmentSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   DATABASE_URL: z.string().min(1),
+  DATABASE_EXPECTED_USER: optionalNonEmptyString,
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   AUTH_MODE: z.enum(["SESSION", "HEADER", "OFF"]).default("OFF"),
@@ -34,8 +38,8 @@ const environmentSchema = z.object({
   PROVIDER_INITIAL_STATUS: optionalNonEmptyString,
   PROVIDER_ACTIVE_STATUSES: z.string().default(""),
   DISTRICT_FEE_FLOORS_JSON: z.string().default("{}"),
-  CREDENTIAL_FRESHNESS_DAYS: optionalIntegerString,
-  PUBLIC_STATS_MIN_CELL_SIZE: optionalIntegerString,
+  CREDENTIAL_FRESHNESS_DAYS: optionalPositiveIntegerString,
+  PUBLIC_STATS_MIN_CELL_SIZE: optionalPositiveIntegerString,
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;
@@ -55,6 +59,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
   }
   if (parsed.NODE_ENV === "production" && parsed.AUTH_MODE !== "SESSION") {
     throw new Error("Production startup requires database-backed session authentication");
+  }
+  if (parsed.NODE_ENV === "production" && !parsed.DATABASE_EXPECTED_USER) {
+    throw new Error("Production startup requires DATABASE_EXPECTED_USER");
   }
   if (
     parsed.AUTH_MODE === "SESSION" &&
@@ -77,6 +84,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     host: parsed.HOST,
     port: parsed.PORT,
     databaseUrl: parsed.DATABASE_URL,
+    databaseExpectedUser: parsed.DATABASE_EXPECTED_USER,
     databasePoolMax: parsed.DATABASE_POOL_MAX,
     logLevel: parsed.LOG_LEVEL,
     authMode: parsed.AUTH_MODE,

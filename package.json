@@ -23,6 +23,7 @@
     "test:concurrency": "vitest run tests/concurrency",
     "check:citizen-dto": "tsx scripts/check-citizen-dto-boundary.ts",
     "db:migrate": "tsx scripts/migrate.ts",
+    "db:apply-runtime-role": "tsx scripts/apply-runtime-role.ts",
     "db:verify": "tsx scripts/verify-database.ts",
     "verify": "npm run typecheck && npm run lint && npm run check:citizen-dto && npm test && npm run build"
   },

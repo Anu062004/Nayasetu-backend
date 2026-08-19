@@ -6,6 +6,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO legal_service_runtime;
 
 REVOKE UPDATE, DELETE, TRUNCATE ON credit_event FROM legal_service_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_event FROM legal_service_runtime;
+REVOKE ALL ON schema_migration FROM legal_service_runtime;
 REVOKE INSERT ON credit_event FROM legal_service_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON credit_balance FROM legal_service_runtime;
 GRANT EXECUTE ON FUNCTION append_credit_event(
