@@ -36,8 +36,8 @@ databaseSuite("PostgreSQL concurrency invariants", () => {
           [needId],
         );
         await pool.query(
-          `INSERT INTO allocation(id, need_request_id, provider_id, mode, seed, decided_by)
-             VALUES ($1,$2,$3,'CITIZEN_CHOICE',$2,$4)`,
+            `INSERT INTO allocation(id, need_request_id, provider_id, mode, seed, decided_by)
+             VALUES ($1,$2,$3,'CITIZEN_CHOICE',$2::text,$4)`,
           [allocationIds[index], needId, providerId, citizenId],
         );
       }
