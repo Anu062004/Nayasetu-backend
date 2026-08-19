@@ -9,6 +9,7 @@ import { z } from "zod";
 import { writeAudit } from "../../../modules/audit/application/write-audit.js";
 import { assertInstitutionalConsent } from "../../../modules/identity/application/assert-institutional-consent.js";
 import { assertProviderWriteAuthority } from "../../../modules/identity/application/assert-provider-authority.js";
+import type { DatabaseClient } from "../../../shared/database.js";
 import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
@@ -161,6 +162,13 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
       }
     }
     const provider = await withTransaction(app.db, async (client) => {
+      const providerRole = await client.query(
+        "SELECT 1 FROM role_grant WHERE user_id = $1 AND role = 'PROVIDER'",
+        [body.userId],
+      );
+      if (!providerRole.rowCount) {
+        throw new AppError(404, "PROVIDER_ROLE_NOT_FOUND", "Provider role grant was not found");
+      }
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO provider(
            user_id, provider_type, display_name, district, state, languages, service_modes, status
@@ -211,6 +219,7 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
     async (request, reply) => {
       const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
       const body = parseBody(issuerFetchSchema, request.body);
+      await assertProviderWriteAuthority(app.db, actor, request.params.id);
       const configuredMode = {
         DIGILOCKER: app.config.capabilities.credentialDigiLocker,
         BAR: app.config.capabilities.credentialBar,
@@ -259,6 +268,7 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
     "/v1/providers/:id/credentials/upload",
     async (request, reply) => {
       const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+      await assertProviderWriteAuthority(app.db, actor, request.params.id);
       const file = await request.file();
       if (!file) throw new AppError(400, "FILE_REQUIRED", "A credential file is required");
       const tempPath = path.join(tmpdir(), `credential-${randomUUID()}.tmp`);
@@ -301,36 +311,52 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
     if (actor.actorType === "PROVIDER") {
       await assertProviderWriteAuthority(app.db, actor, request.params.id);
     }
-    if (actor.actorType === "INSTITUTION") {
-      await assertInstitutionalConsent(
-        app.db,
-        actor,
-        request.params.id,
-        "providers:record:read",
-        headerValue(request.headers["x-consent-ref"]),
+    const readVerification = async (database: DatabaseClient) => {
+      const result = await database.query<{
+        id: string;
+        status: string;
+        tier_outcome: string | null;
+        submitted_at: Date;
+        decided_at: Date | null;
+        checks: unknown[];
+      }>(
+        `SELECT vc.id, vc.status, vc.tier_outcome, vc.submitted_at, vc.decided_at,
+                COALESCE(json_agg(json_build_object(
+                  'checkType', chk.check_type, 'sourceId', chk.source_id,
+                  'sourceMode', chk.source_mode, 'result', chk.result,
+                  'demoOnly', chk.demo_only, 'checkedAt', chk.checked_at
+                )) FILTER (WHERE chk.id IS NOT NULL), '[]') AS checks
+         FROM verification_case vc
+         LEFT JOIN verification_check chk ON chk.case_id = vc.id
+         WHERE vc.provider_id = $1
+         GROUP BY vc.id ORDER BY vc.submitted_at DESC LIMIT 1`,
+        [request.params.id],
       );
-    }
-    const result = await app.db.query<{
-      id: string;
-      status: string;
-      tier_outcome: string | null;
-      submitted_at: Date;
-      decided_at: Date | null;
-      checks: unknown[];
-    }>(
-      `SELECT vc.id, vc.status, vc.tier_outcome, vc.submitted_at, vc.decided_at,
-              COALESCE(json_agg(json_build_object(
-                'checkType', chk.check_type, 'sourceId', chk.source_id, 'sourceMode', chk.source_mode,
-                'result', chk.result, 'demoOnly', chk.demo_only, 'checkedAt', chk.checked_at
-              )) FILTER (WHERE chk.id IS NOT NULL), '[]') AS checks
-       FROM verification_case vc
-       LEFT JOIN verification_check chk ON chk.case_id = vc.id
-       WHERE vc.provider_id = $1
-       GROUP BY vc.id ORDER BY vc.submitted_at DESC LIMIT 1`,
-      [request.params.id],
-    );
-    const row = result.rows[0];
-    if (!row) throw new AppError(404, "VERIFICATION_NOT_FOUND", "Verification case was not found");
+      const row = result.rows[0];
+      if (!row)
+        throw new AppError(404, "VERIFICATION_NOT_FOUND", "Verification case was not found");
+      return row;
+    };
+    const row =
+      actor.actorType === "INSTITUTION"
+        ? await withTransaction(app.db, async (client) => {
+            const consentRef = await assertInstitutionalConsent(
+              client,
+              actor,
+              request.params.id,
+              "providers:record:read",
+              headerValue(request.headers["x-consent-ref"]),
+            );
+            const verification = await readVerification(client);
+            await writeAudit(client, actor, {
+              action: "institutional.provider_verification_accessed",
+              entityType: "provider",
+              entityId: request.params.id,
+              reasonCode: consentRef,
+            });
+            return verification;
+          })
+        : await readVerification(app.db);
     return {
       verificationCaseId: row.id,
       status: row.status,

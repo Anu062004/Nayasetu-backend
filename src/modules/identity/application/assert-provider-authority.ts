@@ -7,15 +7,16 @@ export async function assertProviderWriteAuthority(
   actor: ActorContext,
   providerId: string,
 ): Promise<void> {
-  if (actor.actorType === "ADMIN") return;
-  if (actor.actorType !== "PROVIDER") {
+  if (actor.actorType !== "PROVIDER" && actor.actorType !== "ADMIN") {
     throw new AppError(403, "FORBIDDEN", "Provider authority is required");
   }
-  const result = await database.query("SELECT 1 FROM provider WHERE id = $1 AND user_id = $2", [
-    providerId,
-    actor.actorId,
-  ]);
-  if (!result.rowCount) {
+  const result = await database.query<{ user_id: string }>(
+    "SELECT user_id FROM provider WHERE id = $1",
+    [providerId],
+  );
+  const provider = result.rows[0];
+  if (!provider) throw new AppError(404, "PROVIDER_NOT_FOUND", "Provider profile was not found");
+  if (actor.actorType === "PROVIDER" && provider.user_id !== actor.actorId) {
     throw new AppError(403, "FORBIDDEN", "Provider profile belongs to another actor");
   }
 }
