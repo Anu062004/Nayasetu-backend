@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
   pull_request:
+    branches: [dev]
 
 permissions:
   contents: read
@@ -44,4 +45,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate
+      - run: npm run db:verify
       - run: npm run verify
