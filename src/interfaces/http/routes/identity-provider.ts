@@ -1,0 +1,343 @@
+import { createHash, randomUUID } from "node:crypto";
+import { createWriteStream } from "node:fs";
+import { unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { writeAudit } from "../../../modules/audit/application/write-audit.js";
+import { assertInstitutionalConsent } from "../../../modules/identity/application/assert-institutional-consent.js";
+import { assertProviderWriteAuthority } from "../../../modules/identity/application/assert-provider-authority.js";
+import { withTransaction } from "../../../shared/transaction.js";
+import { requireActor } from "../actor-context.js";
+import { AppError } from "../errors.js";
+import { parseBody } from "../validation.js";
+
+const delegationSchema = z.object({
+  citizenUserId: z.uuid(),
+  consentRef: z.string().min(1).max(500),
+});
+
+const providerSchema = z.object({
+  userId: z.uuid(),
+  providerType: z.string().min(1).max(100),
+  displayName: z.string().min(1).max(200),
+  district: z.string().min(1).max(200),
+  state: z.string().min(1).max(200),
+  languages: z.array(z.string().min(1).max(40)).max(30),
+  serviceModes: z.array(z.string().min(1).max(40)).max(20),
+  services: z
+    .array(
+      z.object({
+        taxonomyCode: z.string().min(1).max(100),
+        feeMin: z.number().nonnegative(),
+        feeMax: z.number().nonnegative(),
+        proBonoAvailable: z.boolean(),
+      }),
+    )
+    .max(100),
+});
+
+const issuerFetchSchema = z.object({
+  source: z.enum(["DIGILOCKER", "BAR", "AIBE"]),
+  checkType: z.string().min(1).max(100),
+});
+
+async function deleteTemporaryFile(tempPath: string): Promise<void> {
+  try {
+    await unlink(tempPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export async function registerIdentityProviderRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/v1/auth/otp/request",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async () => {
+      throw new AppError(503, "CAPABILITY_UNAVAILABLE", "No OTP provider adapter is configured");
+    },
+  );
+
+  app.post(
+    "/v1/auth/otp/verify",
+    { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } },
+    async () => {
+      throw new AppError(503, "CAPABILITY_UNAVAILABLE", "No OTP provider adapter is configured");
+    },
+  );
+
+  app.post("/v1/auth/delegation", async (request, reply) => {
+    const actor = requireActor(request, ["OPERATOR"]);
+    const body = parseBody(delegationSchema, request.body);
+    const result = await withTransaction(app.db, async (client) => {
+      const citizen = await client.query(
+        "SELECT 1 FROM role_grant WHERE user_id = $1 AND role = 'CITIZEN'",
+        [body.citizenUserId],
+      );
+      if (!citizen.rowCount)
+        throw new AppError(404, "CITIZEN_NOT_FOUND", "Citizen role was not found");
+      const inserted = await client.query<{ id: string; started_at: Date }>(
+        `INSERT INTO operator_delegation(operator_user_id, citizen_user_id, consent_ref)
+         VALUES ($1,$2,$3) RETURNING id, started_at`,
+        [actor.actorId, body.citizenUserId, body.consentRef],
+      );
+      const row = inserted.rows[0];
+      if (!row) throw new Error("Delegation insert returned no row");
+      await writeAudit(client, actor, {
+        action: "delegation.opened",
+        entityType: "operator_delegation",
+        entityId: row.id,
+        afterSummary: { citizenUserId: body.citizenUserId, consentRef: body.consentRef },
+      });
+      return row;
+    });
+    return reply
+      .code(201)
+      .send({ delegationId: result.id, startedAt: result.started_at.toISOString() });
+  });
+
+  app.delete<{ Params: { id: string } }>("/v1/auth/delegation/:id", async (request) => {
+    const actor = requireActor(request, ["OPERATOR"]);
+    return withTransaction(app.db, async (client) => {
+      const result = await client.query<{ id: string; ended_at: Date }>(
+        `UPDATE operator_delegation SET ended_at = now()
+         WHERE id = $1 AND operator_user_id = $2 AND ended_at IS NULL
+         RETURNING id, ended_at`,
+        [request.params.id, actor.actorId],
+      );
+      const row = result.rows[0];
+      if (!row)
+        throw new AppError(404, "ACTIVE_DELEGATION_NOT_FOUND", "Active delegation was not found");
+      await writeAudit(client, actor, {
+        action: "delegation.closed",
+        entityType: "operator_delegation",
+        entityId: row.id,
+      });
+      return { delegationId: row.id, endedAt: row.ended_at.toISOString() };
+    });
+  });
+
+  app.post("/v1/providers", async (request, reply) => {
+    const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+    const body = parseBody(providerSchema, request.body);
+    if (!app.config.providerInitialStatus) {
+      throw new AppError(
+        503,
+        "PROVIDER_STATUS_POLICY_NOT_CONFIGURED",
+        "The initial provider status policy has not been supplied",
+      );
+    }
+    if (actor.actorType === "PROVIDER" && actor.actorId !== body.userId) {
+      throw new AppError(403, "FORBIDDEN", "Providers may create only their own profile");
+    }
+    for (const service of body.services) {
+      if (service.feeMax < service.feeMin) {
+        throw new AppError(
+          400,
+          "VALIDATION_ERROR",
+          "feeMax must be greater than or equal to feeMin",
+        );
+      }
+      if (app.config.taxonomyCodes.size === 0) {
+        throw new AppError(
+          503,
+          "TAXONOMY_NOT_CONFIGURED",
+          "Provider services require a configured taxonomy dataset",
+        );
+      }
+      if (!app.config.taxonomyCodes.has(service.taxonomyCode)) {
+        throw new AppError(
+          422,
+          "UNKNOWN_TAXONOMY_CODE",
+          "A provider service uses a code outside the configured taxonomy",
+        );
+      }
+    }
+    const provider = await withTransaction(app.db, async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO provider(
+           user_id, provider_type, display_name, district, state, languages, service_modes, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [
+          body.userId,
+          body.providerType,
+          body.displayName,
+          body.district,
+          body.state,
+          body.languages,
+          body.serviceModes,
+          app.config.providerInitialStatus,
+        ],
+      );
+      const row = inserted.rows[0];
+      if (!row) throw new Error("Provider insert returned no row");
+      for (const service of body.services) {
+        await client.query(
+          `INSERT INTO provider_service(provider_id, taxonomy_code, fee_min, fee_max, pro_bono_available)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [row.id, service.taxonomyCode, service.feeMin, service.feeMax, service.proBonoAvailable],
+        );
+      }
+      await client.query("INSERT INTO credit_balance(provider_id) VALUES ($1)", [row.id]);
+      await client.query("INSERT INTO provider_surface_counter(provider_id) VALUES ($1)", [row.id]);
+      await writeAudit(client, actor, {
+        action: "provider.created",
+        entityType: "provider",
+        entityId: row.id,
+        afterSummary: {
+          providerType: body.providerType,
+          district: body.district,
+          state: body.state,
+        },
+      });
+      return row;
+    });
+    return reply.code(201).send({
+      providerId: provider.id,
+      tier: "SELF_DECLARED",
+      status: app.config.providerInitialStatus,
+    });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/v1/providers/:id/credentials/issuer-fetch",
+    async (request, reply) => {
+      const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+      const body = parseBody(issuerFetchSchema, request.body);
+      const configuredMode = {
+        DIGILOCKER: app.config.capabilities.credentialDigiLocker,
+        BAR: app.config.capabilities.credentialBar,
+        AIBE: app.config.capabilities.credentialAibe,
+      }[body.source];
+      if (configuredMode === "LIVE") {
+        throw new AppError(
+          503,
+          "ADAPTER_NOT_IMPLEMENTED",
+          "A live authorized adapter has not been supplied",
+        );
+      }
+      const result = await withTransaction(app.db, async (client) => {
+        await assertProviderWriteAuthority(client, actor, request.params.id);
+        const created = await client.query<{ id: string }>(
+          "INSERT INTO verification_case(provider_id, status) VALUES ($1,'REVIEW_REQUIRED') RETURNING id",
+          [request.params.id],
+        );
+        const row = created.rows[0];
+        if (!row) throw new Error("Verification case insert returned no row");
+        await client.query(
+          `INSERT INTO verification_check(
+           case_id, check_type, source_id, source_mode, result, demo_only, checked_at
+         ) VALUES ($1,$2,$3,$4,'UNAVAILABLE',$5,now())`,
+          [row.id, body.checkType, body.source, configuredMode, configuredMode === "MOCK"],
+        );
+        await writeAudit(client, actor, {
+          action: "verification.source_checked",
+          entityType: "verification_case",
+          entityId: row.id,
+          afterSummary: { source: body.source, mode: configuredMode, result: "UNAVAILABLE" },
+        });
+        return row;
+      });
+      return reply.code(202).send({
+        verificationCaseId: result.id,
+        status: "REVIEW_REQUIRED",
+        sourceMode: configuredMode,
+        result: "UNAVAILABLE",
+        demoOnly: configuredMode === "MOCK",
+      });
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/v1/providers/:id/credentials/upload",
+    async (request, reply) => {
+      const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+      const file = await request.file();
+      if (!file) throw new AppError(400, "FILE_REQUIRED", "A credential file is required");
+      const tempPath = path.join(tmpdir(), `credential-${randomUUID()}.tmp`);
+      const hash = createHash("sha256");
+      file.file.on("data", (chunk: Buffer) => hash.update(chunk));
+      let deleted = false;
+      try {
+        await pipeline(file.file, createWriteStream(tempPath, { flags: "wx", mode: 0o600 }));
+        if (file.file.truncated) {
+          throw new AppError(413, "FILE_TOO_LARGE", "Credential file exceeds the upload limit");
+        }
+        const digest = hash.digest("hex");
+        await deleteTemporaryFile(tempPath);
+        deleted = true;
+        const result = await withTransaction(app.db, async (client) => {
+          await assertProviderWriteAuthority(client, actor, request.params.id);
+          const created = await client.query<{ id: string }>(
+            "INSERT INTO verification_case(provider_id, status) VALUES ($1,'REVIEW_REQUIRED') RETURNING id",
+            [request.params.id],
+          );
+          const row = created.rows[0];
+          if (!row) throw new Error("Verification case insert returned no row");
+          await writeAudit(client, actor, {
+            action: "verification.document_processed_ephemerally",
+            entityType: "verification_case",
+            entityId: row.id,
+            afterSummary: { contentHash: digest, status: "REVIEW_REQUIRED" },
+          });
+          return row;
+        });
+        return reply.code(202).send({ verificationCaseId: result.id, status: "REVIEW_REQUIRED" });
+      } finally {
+        if (!deleted) await deleteTemporaryFile(tempPath);
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string } }>("/v1/providers/:id/verification", async (request) => {
+    const actor = requireActor(request, ["PROVIDER", "ADMIN", "INSTITUTION"]);
+    if (actor.actorType === "PROVIDER") {
+      await assertProviderWriteAuthority(app.db, actor, request.params.id);
+    }
+    if (actor.actorType === "INSTITUTION") {
+      await assertInstitutionalConsent(
+        app.db,
+        actor,
+        request.params.id,
+        "providers:record:read",
+        headerValue(request.headers["x-consent-ref"]),
+      );
+    }
+    const result = await app.db.query<{
+      id: string;
+      status: string;
+      tier_outcome: string | null;
+      submitted_at: Date;
+      decided_at: Date | null;
+      checks: unknown[];
+    }>(
+      `SELECT vc.id, vc.status, vc.tier_outcome, vc.submitted_at, vc.decided_at,
+              COALESCE(json_agg(json_build_object(
+                'checkType', chk.check_type, 'sourceId', chk.source_id, 'sourceMode', chk.source_mode,
+                'result', chk.result, 'demoOnly', chk.demo_only, 'checkedAt', chk.checked_at
+              )) FILTER (WHERE chk.id IS NOT NULL), '[]') AS checks
+       FROM verification_case vc
+       LEFT JOIN verification_check chk ON chk.case_id = vc.id
+       WHERE vc.provider_id = $1
+       GROUP BY vc.id ORDER BY vc.submitted_at DESC LIMIT 1`,
+      [request.params.id],
+    );
+    const row = result.rows[0];
+    if (!row) throw new AppError(404, "VERIFICATION_NOT_FOUND", "Verification case was not found");
+    return {
+      verificationCaseId: row.id,
+      status: row.status,
+      tierOutcome: row.tier_outcome,
+      submittedAt: row.submitted_at.toISOString(),
+      decidedAt: row.decided_at?.toISOString() ?? null,
+      checks: row.checks,
+    };
+  });
+}

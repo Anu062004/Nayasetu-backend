@@ -7,9 +7,10 @@ platform custody of client funds.
 
 ## Status
 
-Implementation is in progress from a clean repository. The architecture blueprint is the product
-source of truth. Missing policy datasets and partner contracts are represented as explicit,
-validated configuration gaps; they are not filled with synthetic production facts.
+The repository now contains the Phase 0 data/runtime foundation and fail-closed HTTP surfaces for
+all endpoints listed in the blueprint. It is not production-ready: live OTP, credential-authority,
+payment, and other partner adapters have not been supplied. Missing policy datasets and partner
+contracts are explicit validated gaps, not synthetic production facts.
 
 ## Architecture
 
@@ -26,7 +27,8 @@ and [docs/decisions/0001-initial-architecture.md](docs/decisions/0001-initial-ar
 ## Local setup
 
 1. Copy `.env.example` to `.env` and replace development credentials.
-2. Start PostgreSQL: `docker compose up -d postgres`.
+2. Start a PostgreSQL instance and set `DATABASE_URL`. Docker Compose is optional; it is not
+   required by the application.
 3. Install dependencies: `npm install`.
 4. Apply migrations: `npm run db:migrate`.
 5. Start the API: `npm run dev`.
@@ -51,11 +53,21 @@ Health endpoints:
 Production startup fails if any adapter is configured as `MOCK`. A mock result is always
 `DEMO_ONLY` metadata and cannot produce `FULLY_VERIFIED` by itself.
 
+## Authentication modes
+
+- `SESSION` resolves an opaque bearer token from `auth_session`; only a keyed digest is stored.
+- `HEADER` is a development/test mode and is rejected in production.
+- `OFF` leaves product endpoints unauthenticated and therefore inaccessible.
+
+Production requires `SESSION` and a strong `SESSION_TOKEN_PEPPER`. OTP endpoints remain
+fail-closed until an authorized OTP adapter is implemented, so that adapter is a deployment
+blocker for end-user login.
+
 ## Verification
 
-Run `npm run verify`. Database integration and concurrency tests require `DATABASE_URL` and a real
-PostgreSQL instance. The acceptance suite mirrors the explicit correctness tests in section 14 of
-the blueprint.
+Run `npm run verify`. Database integration checks require `DATABASE_URL` and a real PostgreSQL
+instance. Full concurrent rotation, booking, ledger, and webhook tests remain required before a
+production release; they were not run locally during the no-Docker implementation pass.
 
 ## Non-negotiable boundaries
 

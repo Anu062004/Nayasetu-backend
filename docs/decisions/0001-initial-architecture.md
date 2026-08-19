@@ -23,8 +23,9 @@ with a `tstzrange` slot solely to realize the specified exclusion constraint. It
 hold expiry or additional business transitions until policy is supplied.
 
 The ledger hash needs a canonical byte representation that the blueprint does not specify. Initial
-code versions the canonical encoding and its first-event sentinel before any production event is
-written. This decision must remain stable once production data exists.
+code uses versioned, length-prefixed UTF-8 fields, a 32-byte zero genesis value, UTC timestamps,
+and SHA-256. A security-definer database writer performs the chain insert, balance update, and
+audit atomically. This encoding must remain stable once production data exists.
 
 Directory replay is defined by the persisted `directory_surface`. The initial computation uses the
 request ID as seed and a snapshotted exposure counter, then re-serves the persisted surface. This
@@ -32,8 +33,22 @@ avoids mutable counters changing an already-issued result.
 
 Policy data absent from the blueprint—provider type enumeration, role-specific credential legs,
 taxonomy, Section 12 categories, district fee floors, freshness windows, service-credit weights,
-SLA thresholds, and translations—lives behind versioned configuration schemas with no fabricated
-production entries.
+SLA thresholds, provider lifecycle values, and translations—lives behind versioned configuration
+or fail-closed deployment records with no fabricated production entries.
+
+Opaque session tokens are stored only as keyed SHA-256 HMAC digests. Header authentication remains
+development-only, and production startup requires session mode. A live OTP adapter is still needed
+to issue end-user sessions.
+
+Institutional provider access requires a time-limited consent record bound to institution,
+provider, scope, and consent reference. Institutional roster access additionally requires a
+time-limited roster-specific grant. Provisioning those records is deferred because the blueprint
+does not define an issuance workflow.
+
+The allocation lifecycle adds explicit `ASSIGNED`, `DECLINED`, `CANCELLED`, and `COMPLETED` states
+so a declined rotation can release capacity and re-enter allocation. `ROTATION_DECLINE` is stored
+as an objective conduct signal because the prose mandates a decline signal even though the listed
+signal enum omits its name; it has no citizen-visible or numeric-score interpretation.
 
 ## Deferred decisions
 
@@ -41,7 +56,7 @@ production entries.
 - Section 12 paid-flow override authority and reason policy.
 - Booking hold expiry and complete transition policy.
 - Matter closure confirmation workflow.
-- Rotation-decline signal type: the prose requires a signal but the enumerated signal set omits a
-  decline event; allocation audit is recorded until the policy/schema is clarified.
 - Redemption spending semantics and evidence signing authority.
-- Retention, aggregate-stat suppression, institutional consent, and notification-delivery policy.
+- Retention and notification-delivery policy.
+- Offline-acknowledgement identifier/evidence semantics; the endpoint fails closed until supplied.
+- Consent and roster-grant provisioning authority and retention.

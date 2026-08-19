@@ -6,6 +6,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO legal_service_runtime;
 
 REVOKE UPDATE, DELETE, TRUNCATE ON credit_event FROM legal_service_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_event FROM legal_service_runtime;
+REVOKE INSERT ON credit_event FROM legal_service_runtime;
+REVOKE UPDATE, DELETE, TRUNCATE ON credit_balance FROM legal_service_runtime;
+GRANT EXECUTE ON FUNCTION append_credit_event(
+  uuid, text, numeric, text, numeric, uuid, text, timestamptz,
+  text, uuid, uuid, uuid, text
+) TO legal_service_runtime;
 
--- Balance mutation remains available only to the trusted ledger transaction in this service.
--- Split it into a dedicated DB role/function when deployment role management is available.
+-- Credit events and balance updates are available only through the security-definer writer.

@@ -20,4 +20,5 @@ source blueprint.
 - Citizen-facing DTOs reject score/rank/rating/recommendation and any credit/conduct/grievance data.
 - Schema tests reject privileged-content and client-wallet storage.
 - Contract tests prove `MOCK`, `OFF`, and `UNAVAILABLE` outcomes cannot become official success.
-- Concurrency tests use real PostgreSQL for rotation, booking, ledger, and webhook idempotency.
+- Real-PostgreSQL concurrency tests for rotation, booking, ledger, and webhook idempotency remain a
+  release gate; they are not represented as complete by the current local suite.

@@ -10,6 +10,10 @@ const citizenSchemaRoot = path.join(
   "schemas",
   "citizen",
 );
+const citizenRouteFiles = [
+  path.join(repositoryRoot, "src", "interfaces", "http", "routes", "intake-allocation.ts"),
+  path.join(repositoryRoot, "src", "interfaces", "http", "routes", "scheduling-matter.ts"),
+];
 
 const exactForbidden = new Set([
   "score",
@@ -43,7 +47,7 @@ async function sourceFiles(root: string): Promise<string[]> {
 }
 
 const violations: string[] = [];
-for (const file of await sourceFiles(citizenSchemaRoot)) {
+for (const file of [...(await sourceFiles(citizenSchemaRoot)), ...citizenRouteFiles]) {
   const lines = (await readFile(file, "utf8")).split(/\r?\n/);
   for (const [index, line] of lines.entries()) {
     // Citizen DTOs use one-property-per-line object/type declarations. Match identifiers and

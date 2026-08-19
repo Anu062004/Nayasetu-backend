@@ -21,9 +21,9 @@ config/                 versioned policy datasets (empty until supplied)
 tests/                  unit, integration, acceptance, concurrency, contract
 ```
 
-Each module exposes application contracts through its `index.ts`. Domain rules do not import
-Fastify or concrete adapters. Database transactions are supplied to use cases so a mutation and
-its audit record commit or roll back together.
+Domain rules do not import Fastify or concrete adapters. Database transactions are supplied to use
+cases so a mutation and its audit record commit or roll back together. Public module barrels and
+live adapter implementations will be added as those application contracts stabilize.
 
 ## HTTP surfaces
 
@@ -32,7 +32,8 @@ its audit record commit or roll back together.
 - `institutional`: scoped, consented records and rosters.
 - `admin`: review and operational workflows; no citizen-facing reuse of internal DTOs.
 
-Database rows are never serialized directly. Each surface owns an allowlisted response schema.
+Routes map database rows to allowlisted response objects. Citizen/provider/institutional schema
+namespaces are separate; complete runtime response-schema binding remains an implementation gate.
 
 ## Data boundaries
 
