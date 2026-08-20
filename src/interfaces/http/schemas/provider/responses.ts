@@ -30,13 +30,16 @@ export const issuerFetchResponseSchema = reviewRequiredResponseSchema
   })
   .strict();
 
-export const credentialUploadResponseSchema = reviewRequiredResponseSchema;
-
 export const providerVerificationResponseSchema = z
   .object({
     verificationCaseId: z.uuid(),
     status: z.string().min(1),
     tierOutcome: providerTierSchema.nullable(),
+    currentTier: providerTierSchema,
+    policyVersion: z.string().min(1).nullable(),
+    decisionReasons: z.array(z.string().min(1)),
+    tierExpiresAt: z.iso.datetime().nullable(),
+    currentTierExpiresAt: z.iso.datetime().nullable(),
     submittedAt: z.iso.datetime(),
     decidedAt: z.iso.datetime().nullable(),
     checks: z.array(verificationCheckResponseSchema),

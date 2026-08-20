@@ -40,13 +40,24 @@ namespaces are separate, and successful responses pass through strict runtime sc
 PostgreSQL is authoritative. The schema intentionally has no rating, rank, portfolio, case-content,
 or client-wallet table. `need_request` has no narrative column and `matter` stores metadata only.
 External documents are processed ephemerally and only verification facts/references may persist.
+Credential decisions store their versioned policy snapshot and expiry. Checks and decided cases
+are immutable; the worker claims expired full tiers with `SKIP LOCKED`, degrades them, and records
+the audit in the same transaction.
 
 The schema owner is used only through `MIGRATION_DATABASE_URL`. API and worker processes use the
 distinct `legal_service_app` login through `DATABASE_URL`; startup verifies that it inherits the
 `legal_service_runtime` grants and owns none of the protected ledger, audit, or migration tables.
+The shared runtime login cannot cryptographically bind a supplied application actor UUID to a
+database session. Security-definer credential functions therefore re-check the referenced ADMIN
+grant and scope, while audit attribution still trusts the authenticated application boundary. A
+separate reviewer-service database identity is a deferred hardening option, not an assumed
+blueprint component.
 
 ## External capabilities
 
 Adapters publish explicit runtime modes. `OFF` and `UNAVAILABLE` are typed outcomes. `MOCK` is
 allowed outside production only and always carries a demo-only label. Production startup rejects
 mock modes. Partner endpoints and credentials are not embedded in the repository.
+The owner-managed credential policy registry is empty by default and read-only to the application
+runtime. Missing provider-type legs, approved upload processing, or authority adapters produce an
+explicit unavailable outcome rather than a synthetic decision.

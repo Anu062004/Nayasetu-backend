@@ -12,6 +12,10 @@ const optionalNonEmptyString = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.string().min(1).optional(),
 );
+const optionalUuidString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.uuid().optional(),
+);
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -38,7 +42,7 @@ const environmentSchema = z.object({
   PROVIDER_INITIAL_STATUS: optionalNonEmptyString,
   PROVIDER_ACTIVE_STATUSES: z.string().default(""),
   DISTRICT_FEE_FLOORS_JSON: z.string().default("{}"),
-  CREDENTIAL_FRESHNESS_DAYS: optionalPositiveIntegerString,
+  CREDENTIAL_REVALIDATION_ACTOR_ID: optionalUuidString,
   PUBLIC_STATS_MIN_CELL_SIZE: optionalPositiveIntegerString,
 });
 
@@ -99,9 +103,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
       .map((status) => status.trim())
       .filter(Boolean),
     districtFeeFloors,
-    credentialFreshnessDays: parsed.CREDENTIAL_FRESHNESS_DAYS
-      ? Number(parsed.CREDENTIAL_FRESHNESS_DAYS)
-      : undefined,
+    credentialRevalidationActorId: parsed.CREDENTIAL_REVALIDATION_ACTOR_ID,
     publicStatsMinimumCellSize: parsed.PUBLIC_STATS_MIN_CELL_SIZE
       ? Number(parsed.PUBLIC_STATS_MIN_CELL_SIZE)
       : undefined,

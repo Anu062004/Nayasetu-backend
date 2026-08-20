@@ -27,13 +27,23 @@
 - Strict runtime provider and institutional response schemas with explicit database-row mapping.
 - Grievance transitions enforced in both the domain model and PostgreSQL: `OPEN -> TRIAGED`, then
   one of the three blueprint terminal outcomes.
+- Versioned provider-type credential policies, computed-only tier decisions, persisted decision
+  snapshots, and explicit tier expiry. `FULLY_VERIFIED` requires complete document legs plus fresh
+  `LIVE` authority evidence; mock, unavailable, format-only, and LLM results never contribute.
+- A concurrency-safe worker persists expired or legacy-unbounded `FULLY_VERIFIED` tiers down to
+  `DOCUMENT_VERIFIED` and writes the audit in the same transaction. Directory, rotation, and final
+  citizen selection use the current persisted expiry.
+- Credential checks and decided verification cases are immutable. Manual-review application logic
+  is admin-scoped and computes the tier rather than accepting one from a caller.
 - Database-gated tests for concurrent allocation/booking, audited ledger reconciliation,
   compensating entries, runtime-role denial, and append-only triggers.
 
 ## In progress
 
 - Real PostgreSQL migration verification and the required concurrency suites.
-- Credential tier persistence, current-authority revalidation worker, and manual-review workflow.
+- Authorized current-authority adapters for renewal/reverification.
+- An approved synchronous credential processor or encrypted temporary review store, followed by
+  an explicitly contracted admin review HTTP surface. Upload remains fail-closed without one.
 - Complete booking availability/hold-expiry and both-party closure policy.
 - Live adapter implementations after authorized partner contracts are supplied.
 - End-to-end acceptance coverage for the complete section 14 matrix.
@@ -41,8 +51,8 @@
 ## Intentionally not fabricated
 
 - The five provider-type values and role-specific credential-leg policy.
-- Taxonomy, Section 12 category list, district fee floors, freshness windows, credit weights, and
-  translations.
+- Taxonomy, Section 12 category list, district fee floors, credential-policy values, credit
+  weights, and translations.
 - Live DigiLocker, Bar Council, AIBE, eCourts API, PSP, messaging, LLM, or institutional contracts.
 - Paid-flow override policy, evidence-signing authority, retention periods, or grievance thresholds.
 - Provider lifecycle values, directory-visible provider statuses, and institutional consent/grant

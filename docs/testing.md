@@ -21,6 +21,7 @@ login, and `RUNTIME_DATABASE_PASSWORD` supplies its password. Docker is not requ
 
 ```text
 npm run db:migrate
+npm run db:validate-credential-constraints
 npm run db:apply-runtime-role
 npm run db:verify
 npm test
@@ -36,10 +37,17 @@ The database suites exercise:
 - denial of direct runtime-role ledger mutation;
 - owner-level append-only triggers;
 - runtime login identity/ownership checks; and
-- grievance initial-state and transition enforcement.
+- grievance initial-state and transition enforcement;
+- concurrent credential-expiry claims and atomic downgrade audits; and
+- append-only verification checks.
+
+On a legacy database, first run the credential worker with the configured automation identity until
+all unbounded full tiers have been auditably degraded. The owner-only validation command then
+validates the full-tier expiry constraint; `db:verify` fails while it remains unvalidated.
 
 ## Remaining database release gates
 
 - PSP webhook signature/idempotency concurrency, after the PSP contract is supplied;
 - complete booking hold-expiry behavior, after the policy is supplied; and
-- current-authority credential revalidation, after source policy and freshness rules are supplied.
+- live current-authority renewal/reverification, after an authorized adapter and reviewed policy
+  are supplied.

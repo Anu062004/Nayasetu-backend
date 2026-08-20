@@ -12,6 +12,10 @@ all endpoints listed in the blueprint. It is not production-ready: live OTP, cre
 payment, and other partner adapters have not been supplied. Missing policy datasets and partner
 contracts are explicit validated gaps, not synthetic production facts.
 
+Credential tiers are computed from persisted checks under an explicit versioned provider-type
+policy. Full verification has a stored expiry and is automatically degraded by the worker when it
+expires. The repository ships an empty policy list and no authority identities.
+
 ## Architecture
 
 - TypeScript modular monolith with separate API and worker entrypoints.
@@ -34,9 +38,18 @@ See [docs/architecture.md](docs/architecture.md),
    it is not required by the application.
 3. Install dependencies: `npm install`.
 4. Apply migrations: `npm run db:migrate`.
-5. Create/grant the runtime login: `npm run db:apply-runtime-role`.
-6. Verify the database boundary: `npm run db:verify`.
-7. Start the API: `npm run dev`.
+5. Validate credential constraints: `npm run db:validate-credential-constraints`.
+6. Create/grant the runtime login: `npm run db:apply-runtime-role`.
+7. Verify the database boundary: `npm run db:verify`.
+8. Start the API: `npm run dev`.
+
+The owner-managed credential policy registry is empty until reviewed provider-type policies are
+provisioned; the runtime login cannot modify it. To run automatic expiry degradation, provision a
+user with an `ADMIN` / `credentials:revalidate` role grant, set its UUID in
+`CREDENTIAL_REVALIDATION_ACTOR_ID`, and start
+`npm run dev:worker`. The worker performs no live authority renewal; it only removes expired
+full-verification state. Reads map expired stored full tiers down to document-verified immediately,
+even if the worker is not running.
 
 Health endpoints:
 
@@ -56,7 +69,8 @@ Health endpoints:
 | Institutional exports | `LOCAL` | Evidence artifact only; never an official institutional decision |
 
 Production startup fails if any adapter is configured as `MOCK`. A mock result is always
-`DEMO_ONLY` metadata and cannot produce `FULLY_VERIFIED` by itself.
+`DEMO_ONLY` metadata and contributes to no persisted tier. Credential upload fails closed unless an
+approved processor or protected temporary review store is configured.
 
 ## Authentication modes
 
@@ -72,10 +86,11 @@ blocker for end-user login.
 
 Run `npm run verify`. Database integration checks require `DATABASE_URL`,
 `MIGRATION_DATABASE_URL`, and a real PostgreSQL instance. Prepare that database with
-`npm run db:migrate`, apply the least-privilege role with
-`npm run db:apply-runtime-role`, then run `npm run db:verify` and `npm test`. No Docker-based
-verification is required. See [docs/testing.md](docs/testing.md) for the current coverage and
-remaining release gates.
+`npm run db:migrate`, validate the credential boundary with
+`npm run db:validate-credential-constraints`, and apply the least-privilege role with
+`npm run db:apply-runtime-role`. Then run `npm run db:verify` and `npm test`. No Docker-based
+verification is required. See [docs/testing.md](docs/testing.md) for current coverage and remaining
+release gates.
 
 ## Non-negotiable boundaries
 

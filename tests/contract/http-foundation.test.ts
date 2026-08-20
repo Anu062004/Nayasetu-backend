@@ -105,9 +105,16 @@ describe("HTTP foundation", () => {
     ).toThrow("Production startup requires DATABASE_EXPECTED_USER");
   });
 
-  it("rejects zero-day freshness and zero-cell privacy thresholds", () => {
-    expect(() => testConfig({ CREDENTIAL_FRESHNESS_DAYS: "0" })).toThrow();
+  it("rejects invalid credential worker identity and zero-cell privacy thresholds", () => {
+    expect(() => testConfig({ CREDENTIAL_REVALIDATION_ACTOR_ID: "not-a-uuid" })).toThrow();
     expect(() => testConfig({ PUBLIC_STATS_MIN_CELL_SIZE: "0" })).toThrow();
+  });
+
+  it("loads an explicitly provisioned credential revalidation identity", () => {
+    const config = testConfig({
+      CREDENTIAL_REVALIDATION_ACTOR_ID: "00000000-0000-4000-8000-000000000010",
+    });
+    expect(config.credentialRevalidationActorId).toBe("00000000-0000-4000-8000-000000000010");
   });
 
   it("resolves a scoped actor from an opaque database session", async () => {
@@ -179,6 +186,95 @@ describe("HTTP foundation", () => {
       totalCredits: 12.5,
       periodCredits: 2.5,
       lastEventId: "42",
+    });
+    await app.close();
+  });
+
+  it("fails credential upload closed without creating a false review case", async () => {
+    const actorId = "00000000-0000-4000-8000-000000000001";
+    const providerId = "00000000-0000-4000-8000-000000000002";
+    const statements: string[] = [];
+    const pool = {
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (sql.includes("SELECT user_id FROM provider")) {
+          return { rows: [{ user_id: actorId }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+    const app = await buildApp({ config: testConfig(), pool });
+    const boundary = "credential-upload-boundary";
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/providers/${providerId}/credentials/upload`,
+      headers: {
+        "x-actor-id": actorId,
+        "x-actor-role": "PROVIDER",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="credential.txt"',
+        "Content-Type: text/plain",
+        "",
+        "test credential bytes",
+        `--${boundary}--`,
+        "",
+      ].join("\r\n"),
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      error: { code: "CREDENTIAL_PROCESSOR_NOT_CONFIGURED" },
+    });
+    expect(statements.some((sql) => sql.includes("INSERT INTO verification_case"))).toBe(false);
+    await app.close();
+  });
+
+  it("reports an expired stored full tier as document verified on provider reads", async () => {
+    const actorId = "00000000-0000-4000-8000-000000000001";
+    const providerId = "00000000-0000-4000-8000-000000000002";
+    const verificationCaseId = "00000000-0000-4000-8000-000000000003";
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes("SELECT user_id FROM provider")) {
+          return { rows: [{ user_id: actorId }], rowCount: 1 };
+        }
+        if (sql.includes("FROM verification_case vc")) {
+          return {
+            rows: [
+              {
+                id: verificationCaseId,
+                status: "DECIDED",
+                tier_outcome: "FULLY_VERIFIED",
+                policy_version: "test-policy-v1",
+                decision_reasons: ["CURRENT_LIVE_AUTHORITY_CONFIRMED"],
+                tier_expires_at: new Date("2026-08-18T00:00:00.000Z"),
+                current_tier: "DOCUMENT_VERIFIED",
+                current_tier_expires_at: null,
+                submitted_at: new Date("2026-08-01T00:00:00.000Z"),
+                decided_at: new Date("2026-08-01T01:00:00.000Z"),
+                checks: [],
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+    const app = await buildApp({ config: testConfig(), pool });
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/providers/${providerId}/verification`,
+      headers: { "x-actor-id": actorId, "x-actor-role": "PROVIDER" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      verificationCaseId,
+      tierOutcome: "FULLY_VERIFIED",
+      currentTier: "DOCUMENT_VERIFIED",
+      currentTierExpiresAt: null,
     });
     await app.close();
   });
