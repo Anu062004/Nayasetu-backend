@@ -91,3 +91,25 @@ export const paymentQuoteResponseSchema = z
       .strict(),
   })
   .strict();
+
+export const providerBookingAcceptedResponseSchema = z
+  .object({
+    bookingId: z.uuid(),
+    status: z.literal("CONFIRMED"),
+    matterId: z.uuid(),
+  })
+  .strict();
+
+export const providerBookingDeclinedResponseSchema = z
+  .object({
+    bookingId: z.uuid(),
+    status: z.literal("DECLINED"),
+  })
+  .strict();
+
+export const providerBookingCancelledResponseSchema = z
+  .object({
+    bookingId: z.uuid(),
+    status: z.literal("CANCELLED"),
+  })
+  .strict();

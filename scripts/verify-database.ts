@@ -61,6 +61,17 @@ try {
     credential_degrader: boolean;
     ledger_writer: boolean;
     active_allocation_index: boolean;
+    booking_status_constraint: boolean;
+    booking_slot_constraint: boolean;
+    booking_timestamp_constraint: boolean;
+    booking_identity_constraints: boolean;
+    booking_initial_trigger: boolean;
+    booking_transition_trigger: boolean;
+    matter_shape_constraint: boolean;
+    matter_identity_constraint: boolean;
+    matter_initial_trigger: boolean;
+    matter_lifecycle_trigger: boolean;
+    allocation_scheduling_guard_trigger: boolean;
     grievance_initial_trigger: boolean;
     grievance_transition_trigger: boolean;
   }>(`
@@ -199,6 +210,126 @@ try {
       to_regclass('public.allocation_one_active_per_need') IS NOT NULL AS active_allocation_index,
       EXISTS (
         SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'booking_status_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_status_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'booking_slot_shape_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_slot_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'booking_timestamp_shape_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_timestamp_constraint,
+      (
+        SELECT count(*) = 2 AND bool_and(constraint_row.convalidated)
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname IN (
+          'booking_allocation_identity_fk', 'booking_citizen_identity_fk'
+        )
+          AND constraint_row.contype = 'f'
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_identity_constraints,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE trigger_row.tgname = 'booking_initial_state'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_initial_trigger,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE trigger_row.tgname = 'booking_state_transition'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'booking'
+      ) AS booking_transition_trigger,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'matter_lifecycle_shape_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'matter'
+      ) AS matter_shape_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'matter_booking_identity_fk'
+          AND constraint_row.contype = 'f'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'matter'
+      ) AS matter_identity_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE trigger_row.tgname = 'matter_initial_state'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'matter'
+      ) AS matter_initial_trigger,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE trigger_row.tgname = 'matter_lifecycle_change'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'matter'
+      ) AS matter_lifecycle_trigger,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        JOIN pg_proc function_row ON function_row.oid = trigger_row.tgfoid
+        WHERE trigger_row.tgname = 'allocation_active_scheduling_guard'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'allocation'
+          AND pg_get_functiondef(function_row.oid) LIKE
+            '%OLD.status = ''ASSIGNED'' AND NEW.status = ''COMPLETED''%'
+      ) AS allocation_scheduling_guard_trigger,
+      EXISTS (
+        SELECT 1
         FROM pg_trigger trigger_row
         JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
         JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
@@ -274,7 +405,8 @@ try {
         WHERE namespace_row.nspname = 'public'
           AND table_row.relname IN (
             'credit_event', 'credit_balance', 'audit_event', 'provider',
-            'verification_case', 'verification_check', 'credential_policy', 'schema_migration'
+            'verification_case', 'verification_check', 'credential_policy', 'booking', 'matter',
+            'schema_migration'
           )
           AND pg_get_userbyid(table_row.relowner) = 'legal_service_app'
       ) AS login_owns_protected_table
@@ -331,6 +463,22 @@ try {
     may_truncate_credential_policy: boolean;
     may_execute_credential_finalizer: boolean;
     may_execute_credential_degrader: boolean;
+    may_insert_booking: boolean;
+    may_update_booking: boolean;
+    may_delete_booking: boolean;
+    may_truncate_booking: boolean;
+    may_update_booking_status: boolean;
+    may_update_booking_timestamp: boolean;
+    may_update_booking_identity: boolean;
+    may_update_booking_slot: boolean;
+    may_insert_matter: boolean;
+    may_insert_matter_identity: boolean;
+    may_insert_matter_status: boolean;
+    may_insert_matter_closure: boolean;
+    may_insert_matter_other: boolean;
+    may_update_matter: boolean;
+    may_delete_matter: boolean;
+    may_truncate_matter: boolean;
   }>(`
       SELECT
         has_table_privilege('legal_service_app', 'credit_event', 'INSERT') AS may_insert_event,
@@ -395,7 +543,53 @@ try {
           'legal_service_app',
           'degrade_expired_provider_tiers(uuid,integer,text)',
           'EXECUTE'
-        ) AS may_execute_credential_degrader
+        ) AS may_execute_credential_degrader,
+        has_any_column_privilege('legal_service_app', 'booking', 'INSERT')
+          AS may_insert_booking,
+        has_table_privilege('legal_service_app', 'booking', 'UPDATE')
+          AS may_update_booking,
+        has_table_privilege('legal_service_app', 'booking', 'DELETE')
+          AS may_delete_booking,
+        has_table_privilege('legal_service_app', 'booking', 'TRUNCATE')
+          AS may_truncate_booking,
+        has_column_privilege('legal_service_app', 'booking', 'status', 'UPDATE')
+          AS may_update_booking_status,
+        has_column_privilege('legal_service_app', 'booking', 'updated_at', 'UPDATE')
+          AS may_update_booking_timestamp,
+        (
+          has_column_privilege('legal_service_app', 'booking', 'id', 'UPDATE')
+          OR has_column_privilege('legal_service_app', 'booking', 'need_request_id', 'UPDATE')
+          OR has_column_privilege('legal_service_app', 'booking', 'allocation_id', 'UPDATE')
+          OR has_column_privilege('legal_service_app', 'booking', 'provider_id', 'UPDATE')
+          OR has_column_privilege('legal_service_app', 'booking', 'citizen_user_id', 'UPDATE')
+          OR has_column_privilege('legal_service_app', 'booking', 'created_at', 'UPDATE')
+        ) AS may_update_booking_identity,
+        has_column_privilege('legal_service_app', 'booking', 'slot', 'UPDATE')
+          AS may_update_booking_slot,
+        has_table_privilege('legal_service_app', 'matter', 'INSERT')
+          AS may_insert_matter,
+        (
+          has_column_privilege('legal_service_app', 'matter', 'allocation_id', 'INSERT')
+          AND has_column_privilege('legal_service_app', 'matter', 'provider_id', 'INSERT')
+          AND has_column_privilege('legal_service_app', 'matter', 'citizen_user_id', 'INSERT')
+        ) AS may_insert_matter_identity,
+        has_column_privilege('legal_service_app', 'matter', 'status', 'INSERT')
+          AS may_insert_matter_status,
+        (
+          has_column_privilege('legal_service_app', 'matter', 'closed_at', 'INSERT')
+          OR has_column_privilege('legal_service_app', 'matter', 'close_reason', 'INSERT')
+        ) AS may_insert_matter_closure,
+        (
+          has_column_privilege('legal_service_app', 'matter', 'id', 'INSERT')
+          OR has_column_privilege('legal_service_app', 'matter', 'opened_at', 'INSERT')
+          OR has_column_privilege('legal_service_app', 'matter', 'cnr_number', 'INSERT')
+        ) AS may_insert_matter_other,
+        has_any_column_privilege('legal_service_app', 'matter', 'UPDATE')
+          AS may_update_matter,
+        has_table_privilege('legal_service_app', 'matter', 'DELETE')
+          AS may_delete_matter,
+        has_table_privilege('legal_service_app', 'matter', 'TRUNCATE')
+          AS may_truncate_matter
   `);
   const roleState = privileges.rows[0];
   if (
@@ -428,6 +622,22 @@ try {
     roleState.may_update_credential_policy ||
     roleState.may_delete_credential_policy ||
     roleState.may_truncate_credential_policy ||
+    roleState.may_insert_booking ||
+    roleState.may_update_booking ||
+    roleState.may_delete_booking ||
+    roleState.may_truncate_booking ||
+    !roleState.may_update_booking_status ||
+    !roleState.may_update_booking_timestamp ||
+    roleState.may_update_booking_identity ||
+    roleState.may_update_booking_slot ||
+    roleState.may_insert_matter ||
+    !roleState.may_insert_matter_identity ||
+    !roleState.may_insert_matter_status ||
+    roleState.may_insert_matter_closure ||
+    roleState.may_insert_matter_other ||
+    roleState.may_update_matter ||
+    roleState.may_delete_matter ||
+    roleState.may_truncate_matter ||
     !roleState.may_execute_credential_finalizer ||
     !roleState.may_execute_credential_degrader ||
     !roleState.may_execute_writer

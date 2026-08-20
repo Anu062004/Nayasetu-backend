@@ -14,6 +14,11 @@ GRANT INSERT (
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON verification_case FROM legal_service_runtime;
 GRANT INSERT (provider_id, status) ON verification_case TO legal_service_runtime;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON credential_policy FROM legal_service_runtime;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON booking FROM legal_service_runtime;
+GRANT UPDATE (status, updated_at) ON booking TO legal_service_runtime;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON matter FROM legal_service_runtime;
+GRANT INSERT (allocation_id, provider_id, citizen_user_id, status)
+  ON matter TO legal_service_runtime;
 REVOKE ALL ON schema_migration FROM legal_service_runtime;
 REVOKE INSERT ON credit_event FROM legal_service_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON credit_balance FROM legal_service_runtime;

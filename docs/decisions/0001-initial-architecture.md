@@ -20,7 +20,15 @@ distributed-consistency behavior.
 
 The blueprint references booking but omits its table. The implementation adds a `booking` table
 with a `tstzrange` slot solely to realize the specified exclusion constraint. It does not define
-hold expiry or additional business transitions until policy is supplied.
+hold expiry, availability generation, rescheduling, or post-acceptance cancellation until policy
+is supplied.
+
+The scheduling safety boundary treats the absence of availability and both-party closure policy as
+an unavailable capability. It does not accept a caller-selected interval merely because the overlap
+constraint can store it, and it does not let one party close a matter. Existing held bookings may
+be accepted or declined by their provider; a held booking may be cancelled by an owning party,
+ending its allocation and releasing rotational capacity once. Cancellation after acceptance,
+rescheduling, hold expiry, and closure confirmation remain deferred policy decisions.
 
 The ledger hash needs a canonical byte representation that the blueprint does not specify. Initial
 code uses versioned, length-prefixed UTF-8 fields, a 32-byte zero genesis value, UTC timestamps,

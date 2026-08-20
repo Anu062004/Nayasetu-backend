@@ -10,7 +10,7 @@ source blueprint.
 | 2 | credential policy, decision service, expiry worker + adapters | `FULLY_VERIFIED` requires a current live authority result; stale tiers persistently degrade |
 | 3 | intake, taxonomy, eligibility | Section 12 self-declaration routes away from paid flow |
 | 4 | allocation | Persisted directory replay; fair locked roster allocation |
-| 5 | scheduling | Overlapping active booking is rejected by PostgreSQL |
+| 5 | scheduling state machine, identity constraints, and exclusion rail | Overlapping active booking is rejected by PostgreSQL; missing availability/closure policy fails closed |
 | 6 | ledger, redemption | Chain verifies and event sum reconciles to balance |
 | 7 | settlement + payment adapter | Only verified provider evidence changes payment state |
 | 8 | conduct, grievance, institutional API | Evidence trail and statutory referral states |

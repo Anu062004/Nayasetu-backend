@@ -50,17 +50,10 @@ export const providerSlotsResponseSchema = z
   })
   .strict();
 
-export const bookingStateResponseSchema = z
+export const citizenBookingCancelledResponseSchema = z
   .object({
     bookingId: uuid,
-    status: z.enum(["HELD", "DECLINED", "CANCELLED"]),
-  })
-  .strict();
-
-export const matterCloseResponseSchema = z
-  .object({
-    matterId: uuid,
-    status: z.literal("CLOSED"),
+    status: z.literal("CANCELLED"),
   })
   .strict();
 

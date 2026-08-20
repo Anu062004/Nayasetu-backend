@@ -16,6 +16,11 @@ Credential tiers are computed from persisted checks under an explicit versioned 
 policy. Full verification has a stored expiry and is automatically degraded by the worker when it
 expires. The repository ships an empty policy list and no authority identities.
 
+Scheduling preserves the PostgreSQL overlap boundary and validates persisted booking identities
+and state transitions. Booking creation and matter closure fail closed until reviewed availability
+and both-party confirmation policies are supplied; the API does not accept arbitrary time ranges
+or unilateral closure as substitutes for those policies.
+
 ## Architecture
 
 - TypeScript modular monolith with separate API and worker entrypoints.

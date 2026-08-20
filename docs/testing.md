@@ -30,6 +30,8 @@ npm test
 The database suites exercise:
 
 - the active-booking GiST exclusion race;
+- booking state, finite-slot, participant-identity, and metadata-only matter constraints;
+- runtime denial of booking creation/identity mutation and matter update, deletion, or truncation;
 - 50 concurrent capacity-one roster claims;
 - ledger hash-chain and balance reconciliation;
 - compensating negative ledger events;

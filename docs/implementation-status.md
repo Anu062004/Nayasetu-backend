@@ -15,7 +15,11 @@
   grants.
 - Persisted directory filter/snapshot replay and locked roster allocation with tier, status,
   capacity, conflict, service, and freshness gates.
-- Booking exclusion constraint and allocation lifecycle release on decline/cancel/closure.
+- Booking exclusion constraint and allocation lifecycle release on provider decline or held-booking
+  cancellation.
+- Persisted booking states, finite half-open slots, allocation/participant identity, and matter
+  lifecycle metadata are database constrained. New booking creation, post-acceptance cancellation,
+  and matter closure fail closed while their reviewed policies are absent.
 - Security-definer ledger append that atomically writes the event, balance, chain head, and audit;
   the runtime role cannot directly insert events or mutate balances.
 - Separate migration-owner and application-runtime database identities with startup and deployment
@@ -44,7 +48,8 @@
 - Authorized current-authority adapters for renewal/reverification.
 - An approved synchronous credential processor or encrypted temporary review store, followed by
   an explicitly contracted admin review HTTP surface. Upload remains fail-closed without one.
-- Complete booking availability/hold-expiry and both-party closure policy.
+- Complete booking availability/hold-expiry, post-acceptance cancellation, and both-party closure
+  policy. The affected mutation paths remain unavailable rather than guessing these rules.
 - Live adapter implementations after authorized partner contracts are supplied.
 - End-to-end acceptance coverage for the complete section 14 matrix.
 
