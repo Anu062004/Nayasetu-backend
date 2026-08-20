@@ -1,7 +1,7 @@
 # Legal Service Rails Backend
 
 Product-name-neutral backend implementation of `Backend Architecture v2.1`. The repository
-implements the credential, access/allocation, incentive, payment-orchestration, and
+implements the credential, access/allocation, incentive, settlement-evidence, and
 accountability rails without provider ranking, public ratings, privileged-content storage, or
 platform custody of client funds.
 
@@ -11,6 +11,10 @@ The repository now contains the Phase 0 data/runtime foundation and fail-closed 
 all endpoints listed in the blueprint. It is not production-ready: live OTP, credential-authority,
 payment, and other partner adapters have not been supplied. Missing policy datasets and partner
 contracts are explicit validated gaps, not synthetic production facts.
+
+Payment quotes are persisted evidence records for an authorized paid matter; they do not create a
+PSP intent or prove settlement. This build has no PSP adapter, so payment intents and webhooks are
+unavailable and `PAYMENTS_MODE=LIVE` or `SANDBOX` is rejected at startup.
 
 Credential tiers are computed from persisted checks under an explicit versioned provider-type
 policy. Full verification has a stored expiry and is automatically degraded by the worker when it
@@ -33,7 +37,9 @@ or unilateral closure as substitutes for those policies.
 See [docs/architecture.md](docs/architecture.md),
 [docs/blueprint-traceability.md](docs/blueprint-traceability.md),
 [docs/testing.md](docs/testing.md), and
-[docs/decisions/0001-initial-architecture.md](docs/decisions/0001-initial-architecture.md).
+[docs/decisions/0001-initial-architecture.md](docs/decisions/0001-initial-architecture.md). The
+payment-specific fail-closed decision is recorded in
+[ADR 0002](docs/decisions/0002-payment-capability-honesty.md).
 
 ## Local setup
 
@@ -69,13 +75,14 @@ Health endpoints:
 | State Bar/current authority | `OFF` | Explicitly unavailable until an authorized adapter is configured |
 | AIBE/CoP | `OFF` | Explicitly unavailable until an authorized/public path is configured |
 | Case status | `LINK_ONLY` | Returns the official external continuation, never scraped status |
-| Payments | `OFF` | No online payment transition; offline acknowledgement remains distinct |
+| Payments | `OFF` | Quote evidence only; intents, webhooks, and offline acknowledgement are unavailable |
 | IVR / WhatsApp | `OFF` | Web/API flows remain available |
 | Institutional exports | `LOCAL` | Evidence artifact only; never an official institutional decision |
 
-Production startup fails if any adapter is configured as `MOCK`. A mock result is always
-`DEMO_ONLY` metadata and contributes to no persisted tier. Credential upload fails closed unless an
-approved processor or protected temporary review store is configured.
+Production startup fails if any adapter is configured as `MOCK`. Payment `LIVE` and `SANDBOX`
+modes fail startup in every environment until an authorized PSP adapter exists. A mock result is
+always `DEMO_ONLY` metadata and contributes to no persisted tier. Credential upload fails closed
+unless an approved processor or protected temporary review store is configured.
 
 ## Authentication modes
 

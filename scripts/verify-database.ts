@@ -72,6 +72,12 @@ try {
     matter_initial_trigger: boolean;
     matter_lifecycle_trigger: boolean;
     allocation_scheduling_guard_trigger: boolean;
+    payment_quote_matter_provider_constraint: boolean;
+    payment_quote_currency_constraint: boolean;
+    payment_quote_expiry_constraint: boolean;
+    payment_quote_breakdown_constraint: boolean;
+    payment_quote_append_trigger: boolean;
+    payment_quote_writer: boolean;
     grievance_initial_trigger: boolean;
     grievance_transition_trigger: boolean;
   }>(`
@@ -330,6 +336,80 @@ try {
       ) AS allocation_scheduling_guard_trigger,
       EXISTS (
         SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'payment_quote_matter_provider_fk'
+          AND constraint_row.contype = 'f'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'payment_quote'
+      ) AS payment_quote_matter_provider_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'payment_quote_currency_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'payment_quote'
+      ) AS payment_quote_currency_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'payment_quote_expiry_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'payment_quote'
+      ) AS payment_quote_expiry_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_row
+        JOIN pg_class table_row ON table_row.oid = constraint_row.conrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE constraint_row.conname = 'payment_quote_breakdown_check'
+          AND constraint_row.contype = 'c'
+          AND constraint_row.convalidated
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'payment_quote'
+      ) AS payment_quote_breakdown_constraint,
+      EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_row
+        JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+        JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
+        WHERE trigger_row.tgname = 'payment_quote_append_only'
+          AND NOT trigger_row.tgisinternal
+          AND namespace_row.nspname = 'public'
+          AND table_row.relname = 'payment_quote'
+      ) AS payment_quote_append_trigger,
+      EXISTS (
+        SELECT 1
+        FROM pg_proc function_row
+        WHERE function_row.oid = to_regprocedure(
+          'public.create_payment_quote(uuid,uuid,numeric,text,jsonb,timestamptz,text)'
+        )
+          AND function_row.prosecdef
+          AND function_row.proconfig @> ARRAY['search_path=pg_catalog']::text[]
+          AND pg_get_userbyid(function_row.proowner) NOT IN (
+            'legal_service_app', 'legal_service_runtime'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(function_row.proacl, acldefault('f', function_row.proowner))
+            ) privilege_row
+            WHERE privilege_row.grantee = 0
+              AND privilege_row.privilege_type = 'EXECUTE'
+          )
+      ) AS payment_quote_writer,
+      EXISTS (
+        SELECT 1
         FROM pg_trigger trigger_row
         JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
         JOIN pg_namespace namespace_row ON namespace_row.oid = table_row.relnamespace
@@ -406,7 +486,8 @@ try {
           AND table_row.relname IN (
             'credit_event', 'credit_balance', 'audit_event', 'provider',
             'verification_case', 'verification_check', 'credential_policy', 'booking', 'matter',
-            'schema_migration'
+            'payment_quote', 'payment_intent', 'payment_webhook_event', 'settlement_record',
+            'offline_payment_acknowledgement', 'schema_migration'
           )
           AND pg_get_userbyid(table_row.relowner) = 'legal_service_app'
       ) AS login_owns_protected_table
@@ -479,6 +560,18 @@ try {
     may_update_matter: boolean;
     may_delete_matter: boolean;
     may_truncate_matter: boolean;
+    may_read_payment_quote: boolean;
+    may_insert_payment_quote_table: boolean;
+    may_insert_payment_quote_columns: boolean;
+    may_insert_payment_quote_allowed_columns: boolean;
+    may_insert_payment_quote_system_columns: boolean;
+    may_execute_payment_quote_writer: boolean;
+    may_mutate_payment_quote: boolean;
+    may_read_payment_intent: boolean;
+    may_mutate_payment_intent: boolean;
+    may_mutate_payment_webhook: boolean;
+    may_mutate_settlement_record: boolean;
+    may_mutate_offline_acknowledgement: boolean;
   }>(`
       SELECT
         has_table_privilege('legal_service_app', 'credit_event', 'INSERT') AS may_insert_event,
@@ -589,7 +682,71 @@ try {
         has_table_privilege('legal_service_app', 'matter', 'DELETE')
           AS may_delete_matter,
         has_table_privilege('legal_service_app', 'matter', 'TRUNCATE')
-          AS may_truncate_matter
+          AS may_truncate_matter,
+        has_table_privilege('legal_service_app', 'payment_quote', 'SELECT')
+          AS may_read_payment_quote,
+        has_table_privilege('legal_service_app', 'payment_quote', 'INSERT')
+          AS may_insert_payment_quote_table,
+        has_any_column_privilege('legal_service_app', 'payment_quote', 'INSERT')
+          AS may_insert_payment_quote_columns,
+        (
+          has_column_privilege('legal_service_app', 'payment_quote', 'matter_id', 'INSERT')
+          AND has_column_privilege('legal_service_app', 'payment_quote', 'provider_id', 'INSERT')
+          AND has_column_privilege('legal_service_app', 'payment_quote', 'amount', 'INSERT')
+          AND has_column_privilege('legal_service_app', 'payment_quote', 'currency', 'INSERT')
+          AND has_column_privilege(
+            'legal_service_app', 'payment_quote', 'fee_breakdown_json', 'INSERT'
+          )
+          AND has_column_privilege('legal_service_app', 'payment_quote', 'expires_at', 'INSERT')
+        ) AS may_insert_payment_quote_allowed_columns,
+        (
+          has_column_privilege('legal_service_app', 'payment_quote', 'id', 'INSERT')
+          OR has_column_privilege('legal_service_app', 'payment_quote', 'created_at', 'INSERT')
+        ) AS may_insert_payment_quote_system_columns,
+        has_function_privilege(
+          'legal_service_app',
+          'create_payment_quote(uuid,uuid,numeric,text,jsonb,timestamptz,text)',
+          'EXECUTE'
+        ) AS may_execute_payment_quote_writer,
+        (
+          has_any_column_privilege('legal_service_app', 'payment_quote', 'UPDATE')
+          OR has_table_privilege('legal_service_app', 'payment_quote', 'DELETE')
+          OR has_table_privilege('legal_service_app', 'payment_quote', 'TRUNCATE')
+        ) AS may_mutate_payment_quote,
+        has_table_privilege('legal_service_app', 'payment_intent', 'SELECT')
+          AS may_read_payment_intent,
+        (
+          has_any_column_privilege('legal_service_app', 'payment_intent', 'INSERT')
+          OR has_any_column_privilege('legal_service_app', 'payment_intent', 'UPDATE')
+          OR has_table_privilege('legal_service_app', 'payment_intent', 'DELETE')
+          OR has_table_privilege('legal_service_app', 'payment_intent', 'TRUNCATE')
+        ) AS may_mutate_payment_intent,
+        (
+          has_any_column_privilege('legal_service_app', 'payment_webhook_event', 'INSERT')
+          OR has_any_column_privilege('legal_service_app', 'payment_webhook_event', 'UPDATE')
+          OR has_table_privilege('legal_service_app', 'payment_webhook_event', 'DELETE')
+          OR has_table_privilege('legal_service_app', 'payment_webhook_event', 'TRUNCATE')
+        ) AS may_mutate_payment_webhook,
+        (
+          has_any_column_privilege('legal_service_app', 'settlement_record', 'INSERT')
+          OR has_any_column_privilege('legal_service_app', 'settlement_record', 'UPDATE')
+          OR has_table_privilege('legal_service_app', 'settlement_record', 'DELETE')
+          OR has_table_privilege('legal_service_app', 'settlement_record', 'TRUNCATE')
+        ) AS may_mutate_settlement_record,
+        (
+          has_any_column_privilege(
+            'legal_service_app', 'offline_payment_acknowledgement', 'INSERT'
+          )
+          OR has_any_column_privilege(
+            'legal_service_app', 'offline_payment_acknowledgement', 'UPDATE'
+          )
+          OR has_table_privilege(
+            'legal_service_app', 'offline_payment_acknowledgement', 'DELETE'
+          )
+          OR has_table_privilege(
+            'legal_service_app', 'offline_payment_acknowledgement', 'TRUNCATE'
+          )
+        ) AS may_mutate_offline_acknowledgement
   `);
   const roleState = privileges.rows[0];
   if (
@@ -638,6 +795,18 @@ try {
     roleState.may_update_matter ||
     roleState.may_delete_matter ||
     roleState.may_truncate_matter ||
+    !roleState.may_read_payment_quote ||
+    roleState.may_insert_payment_quote_table ||
+    roleState.may_insert_payment_quote_columns ||
+    roleState.may_insert_payment_quote_allowed_columns ||
+    roleState.may_insert_payment_quote_system_columns ||
+    !roleState.may_execute_payment_quote_writer ||
+    roleState.may_mutate_payment_quote ||
+    !roleState.may_read_payment_intent ||
+    roleState.may_mutate_payment_intent ||
+    roleState.may_mutate_payment_webhook ||
+    roleState.may_mutate_settlement_record ||
+    roleState.may_mutate_offline_acknowledgement ||
     !roleState.may_execute_credential_finalizer ||
     !roleState.may_execute_credential_degrader ||
     !roleState.may_execute_writer

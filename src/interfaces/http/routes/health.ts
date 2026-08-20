@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { readinessCapabilities } from "../../../app/capabilities.js";
 import { assertDatabaseRuntimeIdentity } from "../../../shared/database.js";
 
 export async function registerHealthRoutes(app: FastifyInstance): Promise<void> {
@@ -10,7 +11,7 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
       if (!app.config.databaseExpectedUser) await app.db.query("SELECT 1");
       return {
         status: "ready",
-        capabilities: app.config.capabilities,
+        capabilities: readinessCapabilities(app.config.capabilities),
       };
     } catch {
       return reply.code(503).send({ status: "not_ready" });

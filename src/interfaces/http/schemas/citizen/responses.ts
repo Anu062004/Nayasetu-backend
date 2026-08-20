@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MONEY_AMOUNT_PATTERN } from "../../../../modules/settlement/domain/quote-money.js";
 import { citizenProviderSummarySchema } from "./common.js";
 
 const uuid = z.uuid();
@@ -79,14 +80,16 @@ export const grievanceSubmissionResponseSchema = z
   })
   .strict();
 
-export const paymentStatusResponseSchema = z
+const paymentAmountSchema = z.string().regex(MONEY_AMOUNT_PATTERN);
+
+export const citizenPaymentStatusResponseSchema = z
   .object({
     paymentId: uuid,
     matterId: uuid,
-    paymentProvider: z.string(),
-    providerIntentReference: z.string(),
-    amount: z.number().nonnegative(),
-    status: z.string(),
+    paymentProvider: z.string().min(1),
+    providerIntentReference: z.string().min(1),
+    amount: paymentAmountSchema,
+    status: z.string().min(1),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })

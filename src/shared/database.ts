@@ -27,7 +27,9 @@ export async function assertDatabaseRuntimeIdentity(
                 AND c.relname IN (
                   'credit_event', 'credit_balance', 'audit_event', 'provider',
                   'verification_case', 'verification_check', 'credential_policy',
-                  'booking', 'matter', 'schema_migration'
+                  'booking', 'matter', 'payment_quote', 'payment_intent',
+                  'payment_webhook_event', 'settlement_record',
+                  'offline_payment_acknowledgement', 'schema_migration'
                 )
                 AND pg_get_userbyid(c.relowner) = current_user
             ) AS owns_protected_table,

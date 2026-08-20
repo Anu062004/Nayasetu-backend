@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { redemptionKinds } from "../../../../modules/redemption/domain/kinds.js";
+import { MONEY_AMOUNT_PATTERN } from "../../../../modules/settlement/domain/quote-money.js";
 import {
   providerCreditSummarySchema,
   providerEvidenceEventSchema,
@@ -80,15 +81,28 @@ export const redemptionResponseSchema = z
 export const paymentQuoteResponseSchema = z
   .object({
     quoteId: z.uuid(),
-    amount: z.number().nonnegative(),
+    amount: z.string().regex(MONEY_AMOUNT_PATTERN),
     currency: z.string().regex(/^[A-Z]{3}$/),
     feeBreakdown: z
       .object({
-        professionalFee: z.number().nonnegative(),
-        processingFee: z.number().nonnegative(),
-        platformCommission: z.literal(0),
+        professionalFee: z.string().regex(MONEY_AMOUNT_PATTERN),
+        processingFee: z.string().regex(MONEY_AMOUNT_PATTERN),
+        platformCommission: z.literal("0.00"),
       })
       .strict(),
+  })
+  .strict();
+
+export const providerPaymentStatusResponseSchema = z
+  .object({
+    paymentId: z.uuid(),
+    matterId: z.uuid(),
+    paymentProvider: z.string().min(1),
+    providerIntentReference: z.string().min(1),
+    amount: z.string().regex(MONEY_AMOUNT_PATTERN),
+    status: z.string().min(1),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   })
   .strict();
 

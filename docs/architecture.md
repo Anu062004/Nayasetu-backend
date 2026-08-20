@@ -61,3 +61,9 @@ mock modes. Partner endpoints and credentials are not embedded in the repository
 The owner-managed credential policy registry is empty by default and read-only to the application
 runtime. Missing provider-type legs, approved upload processing, or authority adapters produce an
 explicit unavailable outcome rather than a synthetic decision.
+
+The payment capability is narrower than the generic adapter model because this build contains no
+PSP adapter. `PAYMENTS_MODE` must be `OFF` in every environment, and readiness rechecks that value
+before publishing capability metadata. A stored paid-matter quote is evidence of the quoted fee
+breakdown only; it neither creates an intent nor proves payment. `LIVE`/`SANDBOX`, webhook handling,
+and payment-state transitions require a supplied PSP contract and implementation.

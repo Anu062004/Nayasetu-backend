@@ -92,4 +92,6 @@ configured identifier.
 - Redemption spending semantics and evidence signing authority.
 - Retention and notification-delivery policy.
 - Offline-acknowledgement identifier/evidence semantics; the endpoint fails closed until supplied.
+- PSP selection, intent and webhook contracts, signature verification, idempotency, and payment
+  state mapping. Until these are supplied, payment mode remains `OFF` and quotes are evidence only.
 - Consent and roster-grant provisioning authority and retention.

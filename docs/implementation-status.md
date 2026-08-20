@@ -26,6 +26,11 @@
   verification of membership, ownership, and critical privileges.
 - Fail-closed case-status, credential, public-statistics, online-payment, and offline-ack behavior
   when required contracts or policies are absent.
+- Paid-matter quote records with an explicit zero platform commission. Quotes are evidence only:
+  they create no PSP intent and do not establish a payment-state transition. Because no PSP
+  adapter exists, configuration accepts only `PAYMENTS_MODE=OFF`; intent and webhook endpoints
+  remain unavailable. The runtime creates quotes only through an audited database writer that
+  independently enforces provider ownership, an open matter, and the paid eligibility route.
 - Strict runtime citizen-response schemas plus a static guardrail over those schemas and the
   citizen route modules; unknown response fields are rejected before serialization.
 - Strict runtime provider and institutional response schemas with explicit database-row mapping.
@@ -51,6 +56,8 @@
 - Complete booking availability/hold-expiry, post-acceptance cancellation, and both-party closure
   policy. The affected mutation paths remain unavailable rather than guessing these rules.
 - Live adapter implementations after authorized partner contracts are supplied.
+- An authorized PSP contract and adapter, including provider-specific signature verification,
+  event mapping, and idempotency rules, before payment `LIVE` or `SANDBOX` can be enabled.
 - End-to-end acceptance coverage for the complete section 14 matrix.
 
 ## Intentionally not fabricated
@@ -62,7 +69,8 @@
 - Paid-flow override policy, evidence-signing authority, retention periods, or grievance thresholds.
 - Provider lifecycle values, directory-visible provider statuses, and institutional consent/grant
   provisioning workflow.
-- Offline-acknowledgement identifier/evidence semantics and the payment state graph.
+- PSP identity/signature semantics, offline-acknowledgement identifier/evidence semantics, and the
+  payment state graph.
 
 These gaps are deployment blockers or fail-closed capability states, not hidden defaults.
 

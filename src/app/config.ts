@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paymentModes, resolveRuntimeCapabilities } from "./capabilities.js";
 
 const mode = z.enum(["LIVE", "MOCK", "OFF"]);
 const optionalPositiveIntegerString = z.preprocess(
@@ -31,12 +32,11 @@ const environmentSchema = z.object({
   CREDENTIAL_BAR_MODE: mode.default("OFF"),
   CREDENTIAL_AIBE_MODE: mode.default("OFF"),
   CASE_STATUS_MODE: z.enum(["LIVE", "LINK_ONLY", "OFF"]).default("LINK_ONLY"),
-  PAYMENTS_MODE: z.enum(["LIVE", "SANDBOX", "OFF"]).default("OFF"),
+  PAYMENTS_MODE: z.enum(paymentModes).default("OFF"),
   IVR_MODE: mode.default("OFF"),
   WHATSAPP_MODE: mode.default("OFF"),
   INSTITUTIONAL_EXPORT_MODE: z.enum(["LOCAL", "LIVE", "OFF"]).default("LOCAL"),
   ECOURTS_PUBLIC_URL: z.url().default("https://services.ecourts.gov.in/"),
-  PAYMENT_WEBHOOK_SECRET: z.string().optional(),
   EVIDENCE_SIGNING_SECRET: z.string().optional(),
   TAXONOMY_CODES: z.string().default(""),
   PROVIDER_INITIAL_STATUS: optionalNonEmptyString,
@@ -50,6 +50,16 @@ export type AppConfig = ReturnType<typeof loadConfig>;
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
   const parsed = environmentSchema.parse(environment);
+  const capabilities = resolveRuntimeCapabilities({
+    credentialDigiLocker: parsed.CREDENTIAL_DIGILOCKER_MODE,
+    credentialBar: parsed.CREDENTIAL_BAR_MODE,
+    credentialAibe: parsed.CREDENTIAL_AIBE_MODE,
+    caseStatus: parsed.CASE_STATUS_MODE,
+    payments: parsed.PAYMENTS_MODE,
+    ivr: parsed.IVR_MODE,
+    whatsapp: parsed.WHATSAPP_MODE,
+    institutionalExport: parsed.INSTITUTIONAL_EXPORT_MODE,
+  });
   const mockCapabilities = [
     parsed.CREDENTIAL_DIGILOCKER_MODE,
     parsed.CREDENTIAL_BAR_MODE,
@@ -107,18 +117,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     publicStatsMinimumCellSize: parsed.PUBLIC_STATS_MIN_CELL_SIZE
       ? Number(parsed.PUBLIC_STATS_MIN_CELL_SIZE)
       : undefined,
-    capabilities: {
-      credentialDigiLocker: parsed.CREDENTIAL_DIGILOCKER_MODE,
-      credentialBar: parsed.CREDENTIAL_BAR_MODE,
-      credentialAibe: parsed.CREDENTIAL_AIBE_MODE,
-      caseStatus: parsed.CASE_STATUS_MODE,
-      payments: parsed.PAYMENTS_MODE,
-      ivr: parsed.IVR_MODE,
-      whatsapp: parsed.WHATSAPP_MODE,
-      institutionalExport: parsed.INSTITUTIONAL_EXPORT_MODE,
-    },
+    capabilities,
     ecourtsPublicUrl: parsed.ECOURTS_PUBLIC_URL,
-    paymentWebhookSecret: parsed.PAYMENT_WEBHOOK_SECRET,
     evidenceSigningSecret: parsed.EVIDENCE_SIGNING_SECRET,
   };
 }

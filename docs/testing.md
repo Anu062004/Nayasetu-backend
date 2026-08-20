@@ -11,7 +11,10 @@ npm run verify
 ```
 
 This runs TypeScript checks, Biome, the citizen DTO boundary check, database-independent tests, and
-the production build. PostgreSQL suites report as skipped when `DATABASE_URL` is absent.
+the production build. PostgreSQL suites report as skipped when their required migration-owner or
+runtime database URLs are absent. Unit and
+HTTP contract coverage also verifies that an adapter-less build accepts and advertises only
+`PAYMENTS_MODE=OFF`; `LIVE` and `SANDBOX` fail during configuration loading.
 
 ## PostgreSQL verification
 
@@ -37,6 +40,9 @@ The database suites exercise:
 - compensating negative ledger events;
 - audit creation inside the trusted ledger writer;
 - denial of direct runtime-role ledger mutation;
+- audited payment-quote creation through the trusted writer, including denial for closed,
+  legal-aid, pro-bono, and wrong-provider cases;
+- denial of direct runtime quote insertion and all runtime payment-state mutations;
 - owner-level append-only triggers;
 - runtime login identity/ownership checks; and
 - grievance initial-state and transition enforcement;
@@ -49,7 +55,8 @@ validates the full-tier expiry constraint; `db:verify` fails while it remains un
 
 ## Remaining database release gates
 
-- PSP webhook signature/idempotency concurrency, after the PSP contract is supplied;
+- PSP intent creation plus webhook signature/idempotency concurrency, after the PSP contract,
+  adapter, and payment state map are supplied;
 - complete booking hold-expiry behavior, after the policy is supplied; and
 - live current-authority renewal/reverification, after an authorized adapter and reviewed policy
   are supplied.
