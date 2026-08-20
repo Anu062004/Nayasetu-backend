@@ -20,7 +20,15 @@ distributed-consistency behavior.
 
 The blueprint references booking but omits its table. The implementation adds a `booking` table
 with a `tstzrange` slot solely to realize the specified exclusion constraint. It does not define
-hold expiry or additional business transitions until policy is supplied.
+hold expiry, availability generation, rescheduling, or post-acceptance cancellation until policy
+is supplied.
+
+The scheduling safety boundary treats the absence of availability and both-party closure policy as
+an unavailable capability. It does not accept a caller-selected interval merely because the overlap
+constraint can store it, and it does not let one party close a matter. Existing held bookings may
+be accepted or declined by their provider; a held booking may be cancelled by an owning party,
+ending its allocation and releasing rotational capacity once. Cancellation after acceptance,
+rescheduling, hold expiry, and closure confirmation remain deferred policy decisions.
 
 The ledger hash needs a canonical byte representation that the blueprint does not specify. Initial
 code uses versioned, length-prefixed UTF-8 fields, a 32-byte zero genesis value, UTC timestamps,
@@ -55,13 +63,35 @@ so a declined rotation can release capacity and re-enter allocation. `ROTATION_D
 as an objective conduct signal because the prose mandates a decline signal even though the listed
 signal enum omits its name; it has no citizen-visible or numeric-score interpretation.
 
+Credential policy is an explicit owner-managed, versioned database registry keyed by provider type;
+the runtime can read but not modify it, and the repository ships no provider types, credential
+legs, authority mappings, or freshness values. A decision stores the validated registry snapshot
+and is computed only from persisted checks in one active review case. `FULLY_VERIFIED` expires at
+the earliest applicable evidence bound. Expired tiers persistently degrade to
+`DOCUMENT_VERIFIED`.
+
+Credential upload rejects before filesystem persistence until an approved synchronous processor or
+encrypted temporary review store is configured; deleting the only evidence is not represented as
+a queued manual review. Any future processor must use owner-only temporary files and guaranteed
+deletion. The manual review command remains an internal application contract because the blueprint
+does not define its admin HTTP route.
+
+Automated credential expiry uses an explicitly provisioned user with an `ADMIN` role grant as its
+service identity because the audit actor model contains only blueprint roles and requires a real
+foreign-key principal. No default account is created, and the worker remains disabled without the
+configured identifier.
+
 ## Deferred decisions
 
 - Real authority, requester, PSP, messaging, LLM, and institutional partner contracts.
+- Credential reviewer provisioning, approved upload-processing/storage policy, and admin HTTP
+  contract.
 - Section 12 paid-flow override authority and reason policy.
 - Booking hold expiry and complete transition policy.
 - Matter closure confirmation workflow.
 - Redemption spending semantics and evidence signing authority.
 - Retention and notification-delivery policy.
 - Offline-acknowledgement identifier/evidence semantics; the endpoint fails closed until supplied.
+- PSP selection, intent and webhook contracts, signature verification, idempotency, and payment
+  state mapping. Until these are supplied, payment mode remains `OFF` and quotes are evidence only.
 - Consent and roster-grant provisioning authority and retention.

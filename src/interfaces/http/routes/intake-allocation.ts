@@ -253,7 +253,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
          JOIN provider_service ps ON ps.provider_id = p.id
          LEFT JOIN provider_surface_counter sc ON sc.provider_id = p.id
          WHERE p.provider_type = $1
-           AND p.status = ANY($9::text[])
+           AND p.status = ANY($8::text[])
            AND ps.taxonomy_code = $2
            AND p.district = $3
            AND $4 = ANY(p.languages)
@@ -265,7 +265,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
                         WHEN 'FULLY_VERIFIED' THEN 3 ELSE 4 END)
            AND (
              p.tier <> 'FULLY_VERIFIED' OR
-             ($8::integer IS NOT NULL AND p.tier_decided_at >= now() - make_interval(days => $8))
+             p.tier_expires_at > now()
            )`,
           [
             query.providerType,
@@ -275,7 +275,6 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
             need.mode_pref,
             need.fee_ceiling,
             query.minimumTier,
-            app.config.credentialFreshnessDays ?? null,
             app.config.providerActiveStatuses,
           ],
         );
@@ -383,6 +382,50 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
           "PROVIDER_NOT_SURFACED",
           "Provider was not in the persisted directory",
         );
+      if (!need.directory_provider_type || !need.directory_minimum_tier) {
+        throw new AppError(
+          409,
+          "DIRECTORY_STATE_INCOMPLETE",
+          "The persisted directory filters are incomplete",
+        );
+      }
+      const currentEligibility = await client.query<{ eligible: boolean }>(
+        `SELECT true AS eligible
+           FROM provider p
+           JOIN provider_service ps ON ps.provider_id = p.id
+           WHERE p.id = $1
+             AND p.provider_type = $2
+             AND p.status = ANY($3::text[])
+             AND ps.taxonomy_code = $4
+             AND p.district = $5
+             AND $6 = ANY(p.languages)
+             AND $7 = ANY(p.service_modes)
+             AND ($8::numeric IS NULL OR ps.fee_min <= $8)
+             AND (CASE p.tier WHEN 'SELF_DECLARED' THEN 1 WHEN 'DOCUMENT_VERIFIED' THEN 2
+                              WHEN 'FULLY_VERIFIED' THEN 3 ELSE 0 END) >=
+                 (CASE $9 WHEN 'SELF_DECLARED' THEN 1 WHEN 'DOCUMENT_VERIFIED' THEN 2
+                          WHEN 'FULLY_VERIFIED' THEN 3 ELSE 4 END)
+             AND (p.tier <> 'FULLY_VERIFIED' OR p.tier_expires_at > now())
+           FOR UPDATE OF p`,
+        [
+          body.providerId,
+          need.directory_provider_type,
+          app.config.providerActiveStatuses,
+          need.taxonomy_code,
+          need.district,
+          need.language,
+          need.mode_pref,
+          need.fee_ceiling,
+          need.directory_minimum_tier,
+        ],
+      );
+      if (!currentEligibility.rows[0]?.eligible) {
+        throw new AppError(
+          409,
+          "PROVIDER_NO_LONGER_ELIGIBLE",
+          "The selected provider no longer satisfies the persisted directory filters",
+        );
+      }
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO allocation(need_request_id, provider_id, mode, seed, position, decided_by)
          VALUES ($1,$2,'CITIZEN_CHOICE',$3,$4,$5) RETURNING id`,
@@ -445,7 +488,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
            AND rm.status = 'AVAILABLE' AND rm.active_matters < rm.capacity
            AND rm.conflict_blocked = false
            AND r.minimum_tier IS NOT NULL
-           AND p.status = ANY($6::text[]) AND p.provider_type = r.provider_type
+           AND p.status = ANY($5::text[]) AND p.provider_type = r.provider_type
            AND ($4 = 'PAID' OR ps.pro_bono_available = true)
            AND (CASE p.tier WHEN 'SELF_DECLARED' THEN 1 WHEN 'DOCUMENT_VERIFIED' THEN 2
                             WHEN 'FULLY_VERIFIED' THEN 3 ELSE 0 END) >=
@@ -453,16 +496,15 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
                                     WHEN 'FULLY_VERIFIED' THEN 3 ELSE 4 END)
            AND (
              p.tier <> 'FULLY_VERIFIED' OR
-             ($5::integer IS NOT NULL AND p.tier_decided_at >= now() - make_interval(days => $5))
+             p.tier_expires_at > now()
            )
          ORDER BY rm.active_matters ASC, rm.last_assigned_at ASC NULLS FIRST
-         FOR UPDATE OF rm SKIP LOCKED LIMIT 1`,
+         FOR UPDATE OF rm, p SKIP LOCKED LIMIT 1`,
         [
           body.rosterId,
           need.district,
           need.taxonomy_code,
           need.route,
-          app.config.credentialFreshnessDays ?? null,
           app.config.providerActiveStatuses,
         ],
       );

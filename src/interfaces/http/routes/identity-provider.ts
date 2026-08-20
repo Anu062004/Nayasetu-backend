@@ -1,12 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../../modules/audit/application/write-audit.js";
+import { recordUnavailableSourceCheck } from "../../../modules/credential/application/record-source-unavailable.js";
 import { assertInstitutionalConsent } from "../../../modules/identity/application/assert-institutional-consent.js";
 import { assertProviderWriteAuthority } from "../../../modules/identity/application/assert-provider-authority.js";
 import type { DatabaseClient } from "../../../shared/database.js";
@@ -14,7 +9,6 @@ import { withTransaction } from "../../../shared/transaction.js";
 import { requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
 import {
-  credentialUploadResponseSchema,
   issuerFetchResponseSchema,
   providerCreatedResponseSchema,
   providerVerificationResponseSchema,
@@ -50,14 +44,6 @@ const issuerFetchSchema = z.object({
   source: z.enum(["DIGILOCKER", "BAR", "AIBE"]),
   checkType: z.string().min(1).max(100),
 });
-
-async function deleteTemporaryFile(tempPath: string): Promise<void> {
-  try {
-    await unlink(tempPath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-}
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -240,31 +226,17 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
           "A live authorized adapter has not been supplied",
         );
       }
-      const result = await withTransaction(app.db, async (client) => {
-        await assertProviderWriteAuthority(client, actor, request.params.id);
-        const created = await client.query<{ id: string }>(
-          "INSERT INTO verification_case(provider_id, status) VALUES ($1,'REVIEW_REQUIRED') RETURNING id",
-          [request.params.id],
-        );
-        const row = created.rows[0];
-        if (!row) throw new Error("Verification case insert returned no row");
-        await client.query(
-          `INSERT INTO verification_check(
-           case_id, check_type, source_id, source_mode, result, demo_only, checked_at
-         ) VALUES ($1,$2,$3,$4,'UNAVAILABLE',$5,now())`,
-          [row.id, body.checkType, body.source, configuredMode, configuredMode === "MOCK"],
-        );
-        await writeAudit(client, actor, {
-          action: "verification.source_checked",
-          entityType: "verification_case",
-          entityId: row.id,
-          afterSummary: { source: body.source, mode: configuredMode, result: "UNAVAILABLE" },
-        });
-        return row;
-      });
+      const result = await withTransaction(app.db, (client) =>
+        recordUnavailableSourceCheck(client, actor, {
+          providerId: request.params.id,
+          checkType: body.checkType,
+          sourceId: body.source,
+          sourceMode: configuredMode,
+        }),
+      );
       return reply.code(202).send(
         issuerFetchResponseSchema.parse({
-          verificationCaseId: result.id,
+          verificationCaseId: result.verificationCaseId,
           status: "REVIEW_REQUIRED",
           sourceMode: configuredMode,
           result: "UNAVAILABLE",
@@ -274,52 +246,15 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
     },
   );
 
-  app.post<{ Params: { id: string } }>(
-    "/v1/providers/:id/credentials/upload",
-    async (request, reply) => {
-      const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
-      await assertProviderWriteAuthority(app.db, actor, request.params.id);
-      const file = await request.file();
-      if (!file) throw new AppError(400, "FILE_REQUIRED", "A credential file is required");
-      const tempPath = path.join(tmpdir(), `credential-${randomUUID()}.tmp`);
-      const hash = createHash("sha256");
-      file.file.on("data", (chunk: Buffer) => hash.update(chunk));
-      let deleted = false;
-      try {
-        await pipeline(file.file, createWriteStream(tempPath, { flags: "wx", mode: 0o600 }));
-        if (file.file.truncated) {
-          throw new AppError(413, "FILE_TOO_LARGE", "Credential file exceeds the upload limit");
-        }
-        const digest = hash.digest("hex");
-        await deleteTemporaryFile(tempPath);
-        deleted = true;
-        const result = await withTransaction(app.db, async (client) => {
-          await assertProviderWriteAuthority(client, actor, request.params.id);
-          const created = await client.query<{ id: string }>(
-            "INSERT INTO verification_case(provider_id, status) VALUES ($1,'REVIEW_REQUIRED') RETURNING id",
-            [request.params.id],
-          );
-          const row = created.rows[0];
-          if (!row) throw new Error("Verification case insert returned no row");
-          await writeAudit(client, actor, {
-            action: "verification.document_processed_ephemerally",
-            entityType: "verification_case",
-            entityId: row.id,
-            afterSummary: { contentHash: digest, status: "REVIEW_REQUIRED" },
-          });
-          return row;
-        });
-        return reply.code(202).send(
-          credentialUploadResponseSchema.parse({
-            verificationCaseId: result.id,
-            status: "REVIEW_REQUIRED",
-          }),
-        );
-      } finally {
-        if (!deleted) await deleteTemporaryFile(tempPath);
-      }
-    },
-  );
+  app.post<{ Params: { id: string } }>("/v1/providers/:id/credentials/upload", async (request) => {
+    const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+    await assertProviderWriteAuthority(app.db, actor, request.params.id);
+    throw new AppError(
+      503,
+      "CREDENTIAL_PROCESSOR_NOT_CONFIGURED",
+      "No approved synchronous credential processor or encrypted review store is configured",
+    );
+  });
 
   app.get<{ Params: { id: string } }>("/v1/providers/:id/verification", async (request) => {
     const actor = requireActor(request, ["PROVIDER", "ADMIN", "INSTITUTION"]);
@@ -331,20 +266,40 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
         id: string;
         status: string;
         tier_outcome: string | null;
+        policy_version: string | null;
+        decision_reasons: string[];
+        tier_expires_at: Date | null;
+        current_tier: string;
+        current_tier_expires_at: Date | null;
         submitted_at: Date;
         decided_at: Date | null;
         checks: unknown[];
       }>(
-        `SELECT vc.id, vc.status, vc.tier_outcome, vc.submitted_at, vc.decided_at,
+        `SELECT vc.id, vc.status, vc.tier_outcome, vc.policy_version, vc.decision_reasons,
+                vc.tier_expires_at, vc.submitted_at, vc.decided_at,
+                CASE
+                  WHEN p.tier = 'FULLY_VERIFIED'
+                    AND (p.tier_expires_at IS NULL OR p.tier_expires_at <= now())
+                    THEN 'DOCUMENT_VERIFIED'
+                  ELSE p.tier
+                END AS current_tier,
+                CASE
+                  WHEN p.tier = 'FULLY_VERIFIED'
+                    AND (p.tier_expires_at IS NULL OR p.tier_expires_at <= now())
+                    THEN NULL
+                  ELSE p.tier_expires_at
+                END AS current_tier_expires_at,
                 COALESCE(json_agg(json_build_object(
                   'checkType', chk.check_type, 'sourceId', chk.source_id,
                   'sourceMode', chk.source_mode, 'result', chk.result,
                   'demoOnly', chk.demo_only, 'checkedAt', chk.checked_at
                 )) FILTER (WHERE chk.id IS NOT NULL), '[]') AS checks
          FROM verification_case vc
+         JOIN provider p ON p.id = vc.provider_id
          LEFT JOIN verification_check chk ON chk.case_id = vc.id
          WHERE vc.provider_id = $1
-         GROUP BY vc.id ORDER BY vc.submitted_at DESC LIMIT 1`,
+         GROUP BY vc.id, p.tier, p.tier_expires_at
+         ORDER BY vc.submitted_at DESC LIMIT 1`,
         [request.params.id],
       );
       const row = result.rows[0];
@@ -376,6 +331,11 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
       verificationCaseId: row.id,
       status: row.status,
       tierOutcome: row.tier_outcome,
+      currentTier: row.current_tier,
+      policyVersion: row.policy_version,
+      decisionReasons: row.decision_reasons,
+      tierExpiresAt: row.tier_expires_at?.toISOString() ?? null,
+      currentTierExpiresAt: row.current_tier_expires_at?.toISOString() ?? null,
       submittedAt: row.submitted_at.toISOString(),
       decidedAt: row.decided_at?.toISOString() ?? null,
       checks: row.checks,

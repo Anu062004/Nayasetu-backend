@@ -29,19 +29,22 @@ describe("blueprint domain invariants", () => {
       checkType: "ENROLMENT",
       checkedAt: new Date("2026-01-01T00:00:00.000Z"),
       isRequiredDocumentLeg: true,
+      isIdentityConsistencyLeg: true,
       isCurrentAuthorityLeg: true,
     } as const;
     expect(
       decideVerificationTier({
         now: new Date("2026-01-02T00:00:00.000Z"),
         requiredDocumentLegs: ["ENROLMENT"],
+        requiredCurrentAuthorityLegs: ["ENROLMENT"],
         checks: [{ ...base, sourceMode: "MOCK", result: "PASS" }],
       }).tier,
-    ).toBe("DOCUMENT_VERIFIED");
+    ).toBe("SELF_DECLARED");
     expect(
       decideVerificationTier({
         now: new Date(),
         requiredDocumentLegs: ["ENROLMENT"],
+        requiredCurrentAuthorityLegs: ["ENROLMENT"],
         checks: [{ ...base, sourceMode: "LIVE", result: "UNAVAILABLE" }],
       }).tier,
     ).toBe("SELF_DECLARED");
@@ -52,11 +55,13 @@ describe("blueprint domain invariants", () => {
       decideVerificationTier({
         now: new Date(),
         requiredDocumentLegs: ["ENROLMENT"],
+        requiredCurrentAuthorityLegs: ["ENROLMENT"],
         checks: [
           {
             checkType: "ENROLMENT",
             checkedAt: new Date(),
             isRequiredDocumentLeg: true,
+            isIdentityConsistencyLeg: true,
             isCurrentAuthorityLeg: true,
             sourceMode: "LIVE",
             result: "PASS",

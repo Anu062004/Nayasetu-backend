@@ -24,7 +24,13 @@ export async function assertDatabaseRuntimeIdentity(
               FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
               WHERE n.nspname = 'public'
-                AND c.relname IN ('credit_event', 'credit_balance', 'audit_event', 'schema_migration')
+                AND c.relname IN (
+                  'credit_event', 'credit_balance', 'audit_event', 'provider',
+                  'verification_case', 'verification_check', 'credential_policy',
+                  'booking', 'matter', 'payment_quote', 'payment_intent',
+                  'payment_webhook_event', 'settlement_record',
+                  'offline_payment_acknowledgement', 'schema_migration'
+                )
                 AND pg_get_userbyid(c.relowner) = current_user
             ) AS owns_protected_table,
             EXISTS (

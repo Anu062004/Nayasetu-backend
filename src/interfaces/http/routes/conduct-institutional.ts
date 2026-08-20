@@ -75,7 +75,14 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
         total_credits: string;
         objective_signals: unknown[];
       }>(
-        `SELECT p.id AS provider_id, p.tier, COALESCE(cb.total_credits, 0) AS total_credits,
+        `SELECT p.id AS provider_id,
+                CASE
+                  WHEN p.tier = 'FULLY_VERIFIED'
+                    AND (p.tier_expires_at IS NULL OR p.tier_expires_at <= now())
+                    THEN 'DOCUMENT_VERIFIED'
+                  ELSE p.tier
+                END AS tier,
+                COALESCE(cb.total_credits, 0) AS total_credits,
                 COALESCE(json_agg(json_build_object(
                   'type', cs.signal_type, 'value', cs.value, 'recordedAt', cs.recorded_at
                 )) FILTER (WHERE cs.id IS NOT NULL), '[]') AS objective_signals

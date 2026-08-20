@@ -16,7 +16,21 @@ const grievanceMigrationPath = path.join(
   "migrations",
   "003_grievance_state_machine.sql",
 );
+const credentialMigrationPath = path.join(
+  repositoryRoot,
+  "db",
+  "migrations",
+  "004_credential_revalidation.sql",
+);
 const runtimeRolePath = path.join(repositoryRoot, "db", "roles", "runtime.sql");
+const allocationRoutePath = path.join(
+  repositoryRoot,
+  "src",
+  "interfaces",
+  "http",
+  "routes",
+  "intake-allocation.ts",
+);
 
 describe("static blueprint storage boundaries", () => {
   it("does not add narrative or privileged-content columns", async () => {
@@ -66,5 +80,21 @@ describe("static blueprint storage boundaries", () => {
     expect(grievanceMigration).toContain("OLD.status = 'OPEN' AND NEW.status = 'TRIAGED'");
     expect(grievanceMigration).toContain("OLD.status = 'TRIAGED' AND NEW.status IN");
     expect(grievanceMigration).toContain("CREATE TRIGGER grievance_status_transition");
+  });
+
+  it("persists credential expiry and makes checks and decided cases immutable", async () => {
+    const credentialMigration = await readFile(credentialMigrationPath, "utf8");
+    const runtimeRole = await readFile(runtimeRolePath, "utf8");
+    expect(credentialMigration).toContain("ADD COLUMN tier_expires_at timestamptz");
+    expect(credentialMigration).toContain("CREATE TRIGGER verification_check_append_only");
+    expect(credentialMigration).toContain("CREATE TRIGGER verification_case_decided_immutable");
+    expect(runtimeRole).toContain("REVOKE UPDATE, DELETE, TRUNCATE ON verification_check");
+  });
+
+  it("locks the provider while final selection and rotation enforce the current tier", async () => {
+    const allocationRoute = await readFile(allocationRoutePath, "utf8");
+    expect(allocationRoute).toContain("FOR UPDATE OF p");
+    expect(allocationRoute).toContain("FOR UPDATE OF rm, p SKIP LOCKED");
+    expect(allocationRoute).toContain("p.tier_expires_at > now()");
   });
 });

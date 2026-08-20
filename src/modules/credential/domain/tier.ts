@@ -9,14 +9,18 @@ export interface CredentialCheck {
   checkedAt: Date;
   validUntil?: Date;
   isRequiredDocumentLeg: boolean;
+  isIdentityConsistencyLeg: boolean;
   isCurrentAuthorityLeg: boolean;
   isFormatOnly?: boolean;
+  isLlmDerived?: boolean;
 }
 
 export interface TierDecisionInput {
   now: Date;
   checks: readonly CredentialCheck[];
   requiredDocumentLegs: readonly string[];
+  requiredCurrentAuthorityLegs: readonly string[];
+  currentAuthorityFreshnessMs?: number;
 }
 
 export interface TierDecision {
@@ -26,7 +30,13 @@ export interface TierDecision {
 
 export function decideVerificationTier(input: TierDecisionInput): TierDecision {
   const contributing = input.checks.filter(
-    (check) => check.result === "PASS" && check.sourceMode !== "OFF" && !check.isFormatOnly,
+    (check) =>
+      check.result === "PASS" &&
+      check.sourceMode === "LIVE" &&
+      !check.isFormatOnly &&
+      !check.isLlmDerived &&
+      check.checkedAt <= input.now &&
+      (!check.validUntil || check.validUntil > input.now),
   );
   const passedLegs = new Set(
     contributing.filter((check) => check.isRequiredDocumentLeg).map((check) => check.checkType),
@@ -35,29 +45,27 @@ export function decideVerificationTier(input: TierDecisionInput): TierDecision {
   if (!documentsComplete) {
     return { tier: "SELF_DECLARED", reasons: ["REQUIRED_EVIDENCE_INCOMPLETE"] };
   }
+  if (!contributing.some((check) => check.isIdentityConsistencyLeg)) {
+    return { tier: "SELF_DECLARED", reasons: ["IDENTITY_CONSISTENCY_REQUIRED"] };
+  }
 
-  const currentLiveAuthority = contributing.some(
-    (check) =>
-      check.sourceMode === "LIVE" &&
-      check.isCurrentAuthorityLeg &&
-      (!check.validUntil || check.validUntil >= input.now),
+  const currentAuthorityLegs = new Set(
+    contributing
+      .filter(
+        (check) =>
+          check.sourceMode === "LIVE" &&
+          check.isCurrentAuthorityLeg &&
+          input.currentAuthorityFreshnessMs !== undefined &&
+          check.checkedAt.getTime() > input.now.getTime() - input.currentAuthorityFreshnessMs,
+      )
+      .map((check) => check.checkType),
   );
-  if (!currentLiveAuthority) {
+  const currentAuthorityComplete = input.requiredCurrentAuthorityLegs.every((leg) =>
+    currentAuthorityLegs.has(leg),
+  );
+  if (!currentAuthorityComplete) {
     return { tier: "DOCUMENT_VERIFIED", reasons: ["CURRENT_LIVE_AUTHORITY_REQUIRED"] };
   }
 
   return { tier: "FULLY_VERIFIED", reasons: ["CURRENT_LIVE_AUTHORITY_CONFIRMED"] };
-}
-
-export function degradeStaleTier(
-  tier: VerificationTier,
-  tierDecidedAt: Date | undefined,
-  freshnessWindowMs: number | undefined,
-  now: Date,
-): VerificationTier {
-  if (tier !== "FULLY_VERIFIED") return tier;
-  if (!tierDecidedAt || freshnessWindowMs === undefined) return "DOCUMENT_VERIFIED";
-  return now.getTime() - tierDecidedAt.getTime() > freshnessWindowMs
-    ? "DOCUMENT_VERIFIED"
-    : "FULLY_VERIFIED";
 }
