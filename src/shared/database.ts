@@ -62,6 +62,8 @@ export function createPool(config: AppConfig): Pool {
     connectionString: config.databaseUrl,
     max: config.databasePoolMax,
     application_name: "legal-service-rails-backend",
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
   });
 }
 

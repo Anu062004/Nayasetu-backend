@@ -1,0 +1,86 @@
+services:
+  - type: web
+    name: legal-service-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run deploy:setup
+    startCommand: node dist/bin/api.js
+    healthCheckPath: /health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: legal-service-db
+          property: connectionString
+      - key: MIGRATION_DATABASE_URL
+        fromDatabase:
+          name: legal-service-db
+          property: connectionString
+      - key: DATABASE_EXPECTED_USER
+        value: legal_service_app
+      - key: RUNTIME_DATABASE_PASSWORD
+        generateValue: true
+      - key: AUTH_MODE
+        value: SESSION
+      - key: SESSION_TOKEN_PEPPER
+        generateValue: true
+      - key: PAYMENTS_MODE
+        value: OFF
+      - key: CREDENTIAL_DIGILOCKER_MODE
+        value: OFF
+      - key: CREDENTIAL_BAR_MODE
+        value: OFF
+      - key: CREDENTIAL_AIBE_MODE
+        value: OFF
+      - key: CASE_STATUS_MODE
+        value: LINK_ONLY
+      - key: IVR_MODE
+        value: OFF
+      - key: WHATSAPP_MODE
+        value: OFF
+      - key: INSTITUTIONAL_EXPORT_MODE
+        value: LOCAL
+      - key: LOG_LEVEL
+        value: info
+
+  - type: worker
+    name: legal-service-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/bin/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: legal-service-db
+          property: connectionString
+      - key: DATABASE_EXPECTED_USER
+        value: legal_service_app
+      - key: PAYMENTS_MODE
+        value: OFF
+      - key: CREDENTIAL_DIGILOCKER_MODE
+        value: OFF
+      - key: CREDENTIAL_BAR_MODE
+        value: OFF
+      - key: CREDENTIAL_AIBE_MODE
+        value: OFF
+      - key: CASE_STATUS_MODE
+        value: LINK_ONLY
+      - key: IVR_MODE
+        value: OFF
+      - key: WHATSAPP_MODE
+        value: OFF
+      - key: INSTITUTIONAL_EXPORT_MODE
+        value: LOCAL
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: legal-service-db
+    plan: starter
+    databaseName: legal_service_rails
+    user: app_owner

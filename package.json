@@ -5,7 +5,7 @@
   "description": "Product-name-neutral backend implementing the legal service delivery rails blueprint.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/bin/api.ts",
@@ -26,6 +26,8 @@
     "db:apply-runtime-role": "tsx scripts/apply-runtime-role.ts",
     "db:validate-credential-constraints": "tsx scripts/validate-credential-constraints.ts",
     "db:verify": "tsx scripts/verify-database.ts",
+    "release:gate": "tsx scripts/release-gate.ts",
+    "deploy:setup": "tsx scripts/deploy-setup.ts",
     "verify": "npm run typecheck && npm run lint && npm run check:citizen-dto && npm test && npm run build"
   },
   "dependencies": {

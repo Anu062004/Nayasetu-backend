@@ -24,6 +24,9 @@ export async function buildApp(options: BuildAppOptions) {
     requestIdHeader: "x-request-id",
     genReqId: () => crypto.randomUUID(),
     bodyLimit: 1_048_576,
+    trustProxy: true,
+    connectionTimeout: 30_000,
+    keepAliveTimeout: 65_000,
   });
 
   app.decorate("config", options.config);
