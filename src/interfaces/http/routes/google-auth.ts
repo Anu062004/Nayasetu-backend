@@ -122,6 +122,8 @@ export async function registerGoogleAuthRoutes(app: FastifyInstance): Promise<vo
         sessionToken: issued.sessionToken,
         expiresAt: issued.expiresAt.toISOString(),
         userId: issued.userId,
+        accountStatus: issued.accountStatus,
+        profileCompleted: String(issued.accountStatus === "ACTIVE"),
         ...(issued.accountCreated ? { accountCreated: "true" } : {}),
       }).toString();
       return reply.redirect(frontendUrl.toString());

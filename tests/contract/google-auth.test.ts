@@ -149,6 +149,8 @@ describe("Google authentication boundary", () => {
     expect(fragment.get("sessionToken")?.length).toBeGreaterThanOrEqual(32);
     expect(fragment.get("userId")).toBe("00000000-0000-4000-8000-000000000001");
     expect(fragment.get("accountCreated")).toBe("true");
+    expect(fragment.get("accountStatus")).toBe("PENDING_PROFILE");
+    expect(fragment.get("profileCompleted")).toBe("false");
     expect(statements.some((sql) => sql.includes("INSERT INTO user_account"))).toBe(true);
     expect(statements.some((sql) => sql.includes("INSERT INTO role_grant"))).toBe(true);
     expect(statements.some((sql) => sql.includes("INSERT INTO auth_session"))).toBe(true);
@@ -205,6 +207,64 @@ describe("Google authentication boundary", () => {
     });
     expect(response.statusCode).toBe(502);
     expect(statements).toHaveLength(0);
+    await app.close();
+  });
+
+  it("signs an existing active citizen straight in without re-onboarding", async () => {
+    const statements: string[] = [];
+    const pool = {
+      query: async () => ({ rows: [], rowCount: 0 }),
+      connect: async () => ({
+        query: async (sql: string) => {
+          statements.push(sql);
+          if (sql.includes("FROM user_account WHERE email")) {
+            return {
+              rows: [{ id: "00000000-0000-4000-8000-000000000009", status: "ACTIVE" }],
+              rowCount: 1,
+            };
+          }
+          if (sql.includes("INSERT INTO user_account")) {
+            return { rows: [], rowCount: 0 };
+          }
+          if (sql.includes("RETURNING id")) return { rows: [{ id: "x" }], rowCount: 1 };
+          return { rows: [], rowCount: 0 };
+        },
+        release: async () => undefined,
+      }),
+    } as unknown as Pool;
+    const app = await buildApp({ config: googleTestConfig(), pool });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        const target = String(url);
+        if (target === "https://oauth2.googleapis.com/token") {
+          return new Response(JSON.stringify({ access_token: "google-access-token" }), {
+            status: 200,
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            sub: "google-sub-1",
+            email: "returning@example.com",
+            email_verified: true,
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    const state = signOAuthState("nonce", Date.now(), PEPPER);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/google/callback",
+      query: { code: "auth-code", state },
+    });
+    expect(response.statusCode).toBe(302);
+    const location = new URL(response.headers.location as string);
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    expect(fragment.get("accountCreated")).toBeNull();
+    expect(fragment.get("accountStatus")).toBe("ACTIVE");
+    expect(fragment.get("profileCompleted")).toBe("true");
+    expect(statements.some((sql) => sql.includes("FROM user_account WHERE email"))).toBe(true);
     await app.close();
   });
 

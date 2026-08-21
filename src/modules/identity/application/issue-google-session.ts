@@ -10,6 +10,7 @@ export interface IssuedGoogleSession {
   sessionToken: string;
   expiresAt: Date;
   accountCreated: boolean;
+  accountStatus: string;
 }
 
 export async function issueGoogleCitizenSession(
@@ -25,20 +26,23 @@ export async function issueGoogleCitizenSession(
   const tokenDigest = digestSessionToken(sessionToken, input.pepper);
   return withTransaction(pool, async (client) => {
     const inserted = await client.query<{ id: string }>(
-      `INSERT INTO user_account(email, status) VALUES ($1, 'ACTIVE')
+      `INSERT INTO user_account(email, status) VALUES ($1, 'PENDING_PROFILE')
        ON CONFLICT (email) DO NOTHING RETURNING id`,
       [input.email],
     );
     let userId = inserted.rows[0]?.id;
     let accountCreated = true;
+    let accountStatus = "PENDING_PROFILE";
     if (!userId) {
       accountCreated = false;
-      const existing = await client.query<{ id: string }>(
-        "SELECT id FROM user_account WHERE email = $1",
+      const existing = await client.query<{ id: string; status: string }>(
+        "SELECT id, status FROM user_account WHERE email = $1",
         [input.email],
       );
-      userId = existing.rows[0]?.id;
-      if (!userId) throw new Error("Google identity could not be resolved to a user account");
+      const row = existing.rows[0];
+      if (!row) throw new Error("Google identity could not be resolved to a user account");
+      userId = row.id;
+      accountStatus = row.status ?? "PENDING_PROFILE";
     }
     await client.query(
       `INSERT INTO role_grant(user_id, role, scope) VALUES ($1, 'CITIZEN', '')
@@ -63,8 +67,8 @@ export async function issueGoogleCitizenSession(
       action: "auth.google_session_issued",
       entityType: "auth_session",
       entityId: sessionId,
-      afterSummary: { accountCreated },
+      afterSummary: { accountCreated, accountStatus },
     });
-    return { userId, sessionToken, expiresAt, accountCreated };
+    return { userId, sessionToken, expiresAt, accountCreated, accountStatus };
   });
 }

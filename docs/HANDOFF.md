@@ -28,6 +28,10 @@ Codex or engineer can recover the project context from the repository alone.
 - Google OAuth identity adapter (`AUTH_GOOGLE_MODE`): authorization-code flow with signed
   state, verified-email-only account bootstrap, database-backed citizen sessions, and audit.
   `OFF` by default; production rejects `MOCK`. OTP delivery remains unavailable.
+- Citizen profile completion boundary: Google-first accounts start `PENDING_PROFILE`;
+  `POST /v1/me/profile` (name + address only, no document fields) activates the account,
+  and citizen product endpoints reject non-`ACTIVE` accounts with
+  `ACCOUNT_PENDING_PROFILE`. Existing active citizens sign straight in.
 
 ## Deliberately unavailable
 

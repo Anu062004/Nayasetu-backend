@@ -14,6 +14,7 @@ export interface ActorContext {
   requestId: string;
   onBehalfOfCitizenId?: string;
   delegationId?: string;
+  accountStatus?: string;
 }
 
 declare module "fastify" {
@@ -86,13 +87,15 @@ export async function resolveActorFromRequest(
     user_id: string;
     role: ActorContext["actorType"];
     scopes: string[];
+    account_status: string | null;
   }>(
-    `SELECT s.user_id, rg.role,
+    `SELECT s.user_id, rg.role, u.status AS account_status,
             COALESCE(array_agg(rg.scope) FILTER (WHERE rg.scope <> ''), '{}') AS scopes
      FROM auth_session s
      JOIN role_grant rg ON rg.user_id = s.user_id AND rg.role = $2
+     JOIN user_account u ON u.id = s.user_id
      WHERE s.token_digest = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
-     GROUP BY s.user_id, rg.role`,
+     GROUP BY s.user_id, rg.role, u.status`,
     [digestSessionToken(token, config.sessionTokenPepper), requestedRole.data],
   );
   const session = result.rows[0];
@@ -115,6 +118,7 @@ export async function resolveActorFromRequest(
     actorType: session.role,
     scopes: session.scopes,
     requestId: request.id,
+    ...(session.account_status ? { accountStatus: session.account_status } : {}),
     ...(requestedCitizenId ? { onBehalfOfCitizenId: requestedCitizenId } : {}),
     ...(requestedDelegationId ? { delegationId: requestedDelegationId } : {}),
   };

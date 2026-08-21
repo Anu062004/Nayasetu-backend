@@ -39,8 +39,22 @@ export async function buildApp(options: BuildAppOptions) {
     limits: { files: 1, fileSize: 5 * 1024 * 1024, fields: 10 },
   });
 
+  const profileCompletionPath = "/v1/me/profile";
   app.addHook("onRequest", async (request) => {
     request.actor = await resolveActorFromRequest(request, options.config, app.db);
+    const actor = request.actor;
+    if (
+      actor?.actorType === "CITIZEN" &&
+      actor.accountStatus !== undefined &&
+      actor.accountStatus !== "ACTIVE" &&
+      new URL(request.url, "http://localhost").pathname !== profileCompletionPath
+    ) {
+      throw new AppError(
+        403,
+        "ACCOUNT_PENDING_PROFILE",
+        "Profile completion is required before using the product",
+      );
+    }
   });
 
   app.addHook("preValidation", async (request) => {

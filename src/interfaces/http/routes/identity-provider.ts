@@ -15,6 +15,20 @@ import {
 } from "../schemas/provider/responses.js";
 import { parseBody } from "../validation.js";
 
+const providerServicesSchema = z.object({
+  services: z
+    .array(
+      z.object({
+        taxonomyCode: z.string().min(1).max(100),
+        feeMin: z.number().nonnegative(),
+        feeMax: z.number().nonnegative(),
+        proBonoAvailable: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
 const delegationSchema = z.object({
   citizenUserId: z.uuid(),
   consentRef: z.string().min(1).max(500),
@@ -206,6 +220,68 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
         status: app.config.providerInitialStatus,
       }),
     );
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/providers/:id/services", async (request, reply) => {
+    const actor = requireActor(request, ["PROVIDER", "ADMIN"]);
+    const body = parseBody(providerServicesSchema, request.body);
+    await assertProviderWriteAuthority(app.db, actor, request.params.id);
+    if (app.config.taxonomyCodes.size === 0) {
+      throw new AppError(
+        503,
+        "TAXONOMY_NOT_CONFIGURED",
+        "Provider services require a configured taxonomy dataset",
+      );
+    }
+    for (const service of body.services) {
+      if (service.feeMax < service.feeMin) {
+        throw new AppError(
+          400,
+          "VALIDATION_ERROR",
+          "feeMax must be greater than or equal to feeMin",
+        );
+      }
+      if (!app.config.taxonomyCodes.has(service.taxonomyCode)) {
+        throw new AppError(
+          422,
+          "UNKNOWN_TAXONOMY_CODE",
+          "A provider service uses a code outside the configured taxonomy",
+        );
+      }
+    }
+    const added = await withTransaction(app.db, async (client) => {
+      const provider = await client.query<{ id: string }>(
+        "SELECT id FROM provider WHERE id = $1 FOR UPDATE",
+        [request.params.id],
+      );
+      if (!provider.rows[0]) {
+        throw new AppError(404, "PROVIDER_NOT_FOUND", "Provider was not found");
+      }
+      for (const service of body.services) {
+        await client.query(
+          `INSERT INTO provider_service(provider_id, taxonomy_code, fee_min, fee_max, pro_bono_available)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (provider_id, taxonomy_code) DO UPDATE SET
+             fee_min = EXCLUDED.fee_min,
+             fee_max = EXCLUDED.fee_max,
+             pro_bono_available = EXCLUDED.pro_bono_available`,
+          [
+            request.params.id,
+            service.taxonomyCode,
+            service.feeMin,
+            service.feeMax,
+            service.proBonoAvailable,
+          ],
+        );
+      }
+      await writeAudit(client, actor, {
+        action: "provider.services.updated",
+        entityType: "provider",
+        entityId: request.params.id,
+        afterSummary: { taxonomyCodes: body.services.map((service) => service.taxonomyCode) },
+      });
+      return body.services.length;
+    });
+    return reply.code(200).send({ added });
   });
 
   app.post<{ Params: { id: string } }>(
