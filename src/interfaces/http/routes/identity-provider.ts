@@ -6,7 +6,7 @@ import { assertInstitutionalConsent } from "../../../modules/identity/applicatio
 import { assertProviderWriteAuthority } from "../../../modules/identity/application/assert-provider-authority.js";
 import type { DatabaseClient } from "../../../shared/database.js";
 import { withTransaction } from "../../../shared/transaction.js";
-import { requireActor } from "../actor-context.js";
+import { digestSessionToken, requireActor } from "../actor-context.js";
 import { AppError } from "../errors.js";
 import {
   issuerFetchResponseSchema,
@@ -34,8 +34,7 @@ const delegationSchema = z.object({
   consentRef: z.string().min(1).max(500),
 });
 
-const providerSchema = z.object({
-  userId: z.uuid(),
+const providerProfileSchema = z.object({
   providerType: z.string().min(1).max(100),
   displayName: z.string().min(1).max(200),
   district: z.string().min(1).max(200),
@@ -53,6 +52,8 @@ const providerSchema = z.object({
     )
     .max(100),
 });
+
+const providerSchema = providerProfileSchema.extend({ userId: z.uuid() });
 
 const issuerFetchSchema = z.object({
   source: z.enum(["DIGILOCKER", "BAR", "AIBE"]),
@@ -129,6 +130,145 @@ export async function registerIdentityProviderRoutes(app: FastifyInstance): Prom
       });
       return { delegationId: row.id, endedAt: row.ended_at.toISOString() };
     });
+  });
+
+  app.delete("/v1/auth/session", async (request) => {
+    const actor = requireActor(request);
+    const pepper = app.config.sessionTokenPepper;
+    if (app.config.authMode !== "SESSION" || !pepper) {
+      throw new AppError(
+        503,
+        "CAPABILITY_UNAVAILABLE",
+        "Session revocation requires database-backed session authentication",
+      );
+    }
+    const authorization = request.headers.authorization;
+    const header = Array.isArray(authorization) ? authorization[0] : authorization;
+    if (!header?.startsWith("Bearer ")) {
+      throw new AppError(401, "UNAUTHENTICATED", "Authentication is required");
+    }
+    const token = header.slice("Bearer ".length);
+    if (token.length < 32) {
+      throw new AppError(401, "UNAUTHENTICATED", "Authentication is required");
+    }
+    return withTransaction(app.db, async (client) => {
+      const session = await client.query<{ id: string }>(
+        `SELECT id FROM auth_session
+         WHERE token_digest = $1 AND revoked_at IS NULL AND expires_at > now()
+         FOR UPDATE`,
+        [digestSessionToken(token, pepper)],
+      );
+      const row = session.rows[0];
+      if (!row) return { revoked: false };
+      await client.query("UPDATE auth_session SET revoked_at = now() WHERE id = $1", [row.id]);
+      await writeAudit(client, actor, {
+        action: "auth.session.revoked",
+        entityType: "auth_session",
+        entityId: row.id,
+      });
+      return { revoked: true };
+    });
+  });
+
+  app.post("/v1/me/provider", async (request, reply) => {
+    const actor = requireActor(request, ["CITIZEN"]);
+    const body = parseBody(providerProfileSchema, request.body);
+    if (!app.config.providerInitialStatus) {
+      throw new AppError(
+        503,
+        "PROVIDER_STATUS_POLICY_NOT_CONFIGURED",
+        "The initial provider status policy has not been supplied",
+      );
+    }
+    if (app.config.taxonomyCodes.size === 0) {
+      throw new AppError(
+        503,
+        "TAXONOMY_NOT_CONFIGURED",
+        "Provider services require a configured taxonomy dataset",
+      );
+    }
+    for (const service of body.services) {
+      if (service.feeMax < service.feeMin) {
+        throw new AppError(
+          400,
+          "VALIDATION_ERROR",
+          "feeMax must be greater than or equal to feeMin",
+        );
+      }
+      if (!app.config.taxonomyCodes.has(service.taxonomyCode)) {
+        throw new AppError(
+          422,
+          "UNKNOWN_TAXONOMY_CODE",
+          "A provider service uses a code outside the configured taxonomy",
+        );
+      }
+    }
+    const provider = await withTransaction(app.db, async (client) => {
+      const existing = await client.query<{ id: string }>(
+        "SELECT id FROM provider WHERE user_id = $1",
+        [actor.actorId],
+      );
+      if (existing.rows[0]) {
+        throw new AppError(
+          409,
+          "PROVIDER_ALREADY_EXISTS",
+          "A provider profile already exists for this account",
+        );
+      }
+      await client.query(
+        `INSERT INTO role_grant(user_id, role, scope) VALUES ($1, 'PROVIDER', '')
+         ON CONFLICT (user_id, role, scope) DO NOTHING`,
+        [actor.actorId],
+      );
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO provider(
+           user_id, provider_type, display_name, district, state, languages, service_modes, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [
+          actor.actorId,
+          body.providerType,
+          body.displayName,
+          body.district,
+          body.state,
+          body.languages,
+          body.serviceModes,
+          app.config.providerInitialStatus,
+        ],
+      );
+      const row = inserted.rows[0];
+      if (!row) throw new Error("Provider insert returned no row");
+      for (const service of body.services) {
+        await client.query(
+          `INSERT INTO provider_service(provider_id, taxonomy_code, fee_min, fee_max, pro_bono_available)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [row.id, service.taxonomyCode, service.feeMin, service.feeMax, service.proBonoAvailable],
+        );
+      }
+      await client.query("INSERT INTO credit_balance(provider_id) VALUES ($1)", [row.id]);
+      await client.query("INSERT INTO provider_surface_counter(provider_id) VALUES ($1)", [row.id]);
+      await writeAudit(
+        client,
+        { ...actor, actorType: "PROVIDER" },
+        {
+          action: "provider.created.self_served",
+          entityType: "provider",
+          entityId: row.id,
+          afterSummary: {
+            providerType: body.providerType,
+            district: body.district,
+            state: body.state,
+          },
+        },
+      );
+      return row;
+    });
+    return reply.code(201).send(
+      providerCreatedResponseSchema.parse({
+        providerId: provider.id,
+        tier: "SELF_DECLARED",
+        status: app.config.providerInitialStatus,
+      }),
+    );
   });
 
   app.post("/v1/providers", async (request, reply) => {
