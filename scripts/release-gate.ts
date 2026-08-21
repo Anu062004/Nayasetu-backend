@@ -36,12 +36,27 @@ if (!process.env.SESSION_TOKEN_PEPPER || process.env.SESSION_TOKEN_PEPPER.length
   process.exit(1);
 }
 
+if (process.env.AUTH_GOOGLE_MODE === "LIVE") {
+  const googleRequired = [
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REDIRECT_URI",
+    "GOOGLE_OAUTH_FRONTEND_URL",
+  ];
+  const missingGoogle = googleRequired.filter((key) => !process.env[key]);
+  if (missingGoogle.length > 0) {
+    console.error(`AUTH_GOOGLE_MODE=LIVE requires: ${missingGoogle.join(", ")}`);
+    process.exit(1);
+  }
+}
+
 const mockModes = [
   "CREDENTIAL_DIGILOCKER_MODE",
   "CREDENTIAL_BAR_MODE",
   "CREDENTIAL_AIBE_MODE",
   "IVR_MODE",
   "WHATSAPP_MODE",
+  "AUTH_GOOGLE_MODE",
 ];
 const enabledMocks = mockModes.filter((key) => process.env[key] === "MOCK");
 if (enabledMocks.length > 0) {

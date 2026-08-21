@@ -25,6 +25,9 @@ Codex or engineer can recover the project context from the repository alone.
 - Paid-matter quote evidence with zero platform commission and a trusted audited database writer.
 - Strict citizen/provider/institutional response schemas and citizen DTO leakage checks.
 - Explicit capability modes; missing external integrations do not silently succeed.
+- Google OAuth identity adapter (`AUTH_GOOGLE_MODE`): authorization-code flow with signed
+  state, verified-email-only account bootstrap, database-backed citizen sessions, and audit.
+  `OFF` by default; production rejects `MOCK`. OTP delivery remains unavailable.
 
 ## Deliberately unavailable
 

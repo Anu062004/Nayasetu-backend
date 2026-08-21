@@ -26,6 +26,18 @@ services:
         value: SESSION
       - key: SESSION_TOKEN_PEPPER
         generateValue: true
+      - key: SESSION_TTL_HOURS
+        value: "720"
+      - key: AUTH_GOOGLE_MODE
+        value: OFF
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_OAUTH_FRONTEND_URL
+        sync: false
       - key: PAYMENTS_MODE
         value: OFF
       - key: CREDENTIAL_DIGILOCKER_MODE

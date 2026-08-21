@@ -28,6 +28,15 @@ const environmentSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   AUTH_MODE: z.enum(["SESSION", "HEADER", "OFF"]).default("OFF"),
   SESSION_TOKEN_PEPPER: z.string().optional(),
+  SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(8760).default(720),
+  AUTH_GOOGLE_MODE: mode.default("OFF"),
+  GOOGLE_OAUTH_CLIENT_ID: optionalNonEmptyString,
+  GOOGLE_OAUTH_CLIENT_SECRET: optionalNonEmptyString,
+  GOOGLE_OAUTH_REDIRECT_URI: optionalNonEmptyString,
+  GOOGLE_OAUTH_FRONTEND_URL: optionalNonEmptyString,
+  GOOGLE_OAUTH_AUTH_URI: z.url().default("https://accounts.google.com/o/oauth2/auth"),
+  GOOGLE_OAUTH_TOKEN_URI: z.url().default("https://oauth2.googleapis.com/token"),
+  GOOGLE_OAUTH_USERINFO_URI: z.url().default("https://openidconnect.googleapis.com/v1/userinfo"),
   CREDENTIAL_DIGILOCKER_MODE: mode.default("OFF"),
   CREDENTIAL_BAR_MODE: mode.default("OFF"),
   CREDENTIAL_AIBE_MODE: mode.default("OFF"),
@@ -66,10 +75,26 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     parsed.CREDENTIAL_AIBE_MODE,
     parsed.IVR_MODE,
     parsed.WHATSAPP_MODE,
+    parsed.AUTH_GOOGLE_MODE,
   ].filter((value) => value === "MOCK");
 
   if (parsed.NODE_ENV === "production" && mockCapabilities.length > 0) {
     throw new Error("Production startup rejects MOCK capability modes");
+  }
+  if (parsed.AUTH_GOOGLE_MODE === "LIVE") {
+    if (parsed.AUTH_MODE !== "SESSION" || !parsed.SESSION_TOKEN_PEPPER) {
+      throw new Error("LIVE Google authentication requires SESSION auth mode with a pepper");
+    }
+    if (
+      !parsed.GOOGLE_OAUTH_CLIENT_ID ||
+      !parsed.GOOGLE_OAUTH_CLIENT_SECRET ||
+      !parsed.GOOGLE_OAUTH_REDIRECT_URI ||
+      !parsed.GOOGLE_OAUTH_FRONTEND_URL
+    ) {
+      throw new Error(
+        "LIVE Google authentication requires client id, secret, redirect URI, and frontend URL",
+      );
+    }
   }
   if (parsed.NODE_ENV === "production" && parsed.AUTH_MODE !== "SESSION") {
     throw new Error("Production startup requires database-backed session authentication");
@@ -103,6 +128,17 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     logLevel: parsed.LOG_LEVEL,
     authMode: parsed.AUTH_MODE,
     sessionTokenPepper: parsed.SESSION_TOKEN_PEPPER,
+    sessionTtlHours: parsed.SESSION_TTL_HOURS,
+    authGoogle: {
+      mode: parsed.AUTH_GOOGLE_MODE,
+      clientId: parsed.GOOGLE_OAUTH_CLIENT_ID,
+      clientSecret: parsed.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirectUri: parsed.GOOGLE_OAUTH_REDIRECT_URI,
+      frontendUrl: parsed.GOOGLE_OAUTH_FRONTEND_URL,
+      authUri: parsed.GOOGLE_OAUTH_AUTH_URI,
+      tokenUri: parsed.GOOGLE_OAUTH_TOKEN_URI,
+      userinfoUri: parsed.GOOGLE_OAUTH_USERINFO_URI,
+    },
     taxonomyCodes: new Set(
       parsed.TAXONOMY_CODES.split(",")
         .map((code) => code.trim())
