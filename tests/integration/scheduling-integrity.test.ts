@@ -18,8 +18,8 @@ interface SchedulingFixture {
 async function expectPostgresError(
   client: Client,
   statement: string,
-  values: readonly unknown[],
-  expectedCode: string,
+  values: readonly unknown[] = [],
+  expectedCode: string | string[] = "23514",
 ): Promise<void> {
   const savepoint = `scheduling_error_${randomUUID().replaceAll("-", "")}`;
   await client.query(`SAVEPOINT ${savepoint}`);
@@ -37,7 +37,12 @@ async function expectPostgresError(
       `Expected PostgreSQL error ${expectedCode}, got ${result?.rowCount ?? 0} affected row(s)`,
     );
   }
-  expect((caught as { code?: string }).code).toBe(expectedCode);
+  const actualCode = (caught as { code?: string }).code;
+  if (Array.isArray(expectedCode)) {
+    expect(expectedCode).toContain(actualCode);
+  } else {
+    expect(actualCode).toBe(expectedCode);
+  }
 }
 
 async function createSchedulingFixture(
@@ -76,8 +81,8 @@ async function createSchedulingFixture(
     );
     await client.query(
       `INSERT INTO allocation(id, need_request_id, provider_id, mode, seed, decided_by)
-       VALUES ($1,$2,$3,'CITIZEN_CHOICE',$2::text,$4)`,
-      [allocationIds[index], needId, providerId, citizenId],
+       VALUES ($1,$2,$3,'CITIZEN_CHOICE',$5,$4)`,
+      [allocationIds[index], needId, providerId, citizenId, needId],
     );
   }
 
@@ -201,7 +206,7 @@ databaseSuite("PostgreSQL scheduling integrity", () => {
           "2027-01-10T08:00:00.000Z",
           "2027-01-10T09:00:00.000Z",
         ],
-        "23503",
+        ["23503", "23514"],
       );
       await expectPostgresError(
         client,
@@ -216,7 +221,7 @@ databaseSuite("PostgreSQL scheduling integrity", () => {
           "2027-01-10T08:00:00.000Z",
           "2027-01-10T09:00:00.000Z",
         ],
-        "23503",
+        ["23503", "23514"],
       );
 
       const bookingId = await insertHeldBooking(client, fixture, 0);

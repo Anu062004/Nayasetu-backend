@@ -232,7 +232,7 @@ export async function registerLedgerSettlementRoutes(app: FastifyInstance): Prom
          FROM matter m JOIN provider p ON p.id = m.provider_id
          JOIN allocation a ON a.id = m.allocation_id
          JOIN eligibility_decision e ON e.need_request_id = a.need_request_id
-         WHERE m.id = $1 FOR SHARE OF m, a, e`,
+         WHERE m.id = $1`,
         [body.matterId],
       );
       const row = matter.rows[0];

@@ -86,8 +86,8 @@ async function createPaymentFixture(
   );
   await client.query(
     `INSERT INTO allocation(id, need_request_id, provider_id, mode, seed, decided_by)
-     VALUES ($1,$2,$3,'CITIZEN_CHOICE',$2::text,$4)`,
-    [allocationId, needId, providerId, citizenId],
+     VALUES ($1,$2,$3,'CITIZEN_CHOICE',$5,$4)`,
+    [allocationId, needId, providerId, citizenId, needId],
   );
   await client.query(
     `INSERT INTO booking(

@@ -298,13 +298,14 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
           };
           await client.query(
             `INSERT INTO directory_surface(
-             need_request_id, provider_id, position, seed, surfaced_count_snapshot,
-             provider_snapshot, filter_snapshot
-           ) VALUES ($1,$2,$3,$1,$4,$5,$6)`,
+              need_request_id, provider_id, position, seed, surfaced_count_snapshot,
+              provider_snapshot, filter_snapshot
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [
               need.id,
               candidate.providerId,
               index + 1,
+              need.id,
               candidate.surfacedCount,
               providerSnapshot,
               { providerType: query.providerType, minimumTier: query.minimumTier },
@@ -406,7 +407,7 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
                  (CASE $9 WHEN 'SELF_DECLARED' THEN 1 WHEN 'DOCUMENT_VERIFIED' THEN 2
                           WHEN 'FULLY_VERIFIED' THEN 3 ELSE 4 END)
              AND (p.tier <> 'FULLY_VERIFIED' OR p.tier_expires_at > now())
-           FOR UPDATE OF p`,
+            FOR UPDATE OF p`,
         [
           body.providerId,
           need.directory_provider_type,

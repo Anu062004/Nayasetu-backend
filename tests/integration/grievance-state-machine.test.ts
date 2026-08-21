@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
 const databaseSuite = databaseUrl ? describe : describe.skip;
 
 async function expectConstraintFailure(client: Client, statement: string): Promise<void> {

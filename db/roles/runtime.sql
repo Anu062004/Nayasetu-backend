@@ -11,6 +11,7 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON provider FROM legal_service_runtime;
 GRANT INSERT (
   user_id, provider_type, display_name, district, state, languages, service_modes, status
 ) ON provider TO legal_service_runtime;
+GRANT UPDATE (status) ON provider TO legal_service_runtime;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON verification_case FROM legal_service_runtime;
 GRANT INSERT (provider_id, status) ON verification_case TO legal_service_runtime;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON credential_policy FROM legal_service_runtime;

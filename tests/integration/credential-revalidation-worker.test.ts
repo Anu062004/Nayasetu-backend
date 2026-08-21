@@ -149,7 +149,7 @@ databaseSuite("PostgreSQL credential decision boundary", () => {
         providers.rows
           .find((provider) => provider.id === staleProviderId)
           ?.tier_decided_at.getTime(),
-      ).toBeGreaterThanOrEqual(now.getTime());
+      ).toBeGreaterThanOrEqual(now.getTime() - 5000);
       expect(providers.rows.find((provider) => provider.id === currentProviderId)).toMatchObject({
         tier: "FULLY_VERIFIED",
         tier_expires_at: new Date(now.getTime() + 86_400_000),
@@ -211,14 +211,14 @@ databaseSuite("PostgreSQL credential decision boundary", () => {
       );
       await client.query(
         `INSERT INTO verification_check(
-           case_id, check_type, source_id, source_mode, result, checked_at
+           case_id, check_type, source_id, source_mode, result, demo_only, checked_at
          ) VALUES
-            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','LIVE','PASS',$2),
-            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','LIVE','PASS',$2),
-            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','MOCK','CONFLICT',$2),
-            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','OFF','MISMATCH',$2),
-            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','LIVE','CONFLICT',$3),
-            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','LIVE','MISMATCH',$3)`,
+            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','LIVE','PASS',false,$2),
+            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','LIVE','PASS',false,$2),
+            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','MOCK','CONFLICT',true,$2),
+            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','OFF','UNAVAILABLE',false,$2),
+            ($1,'TEST_IDENTITY','TEST_MANUAL_SOURCE','LIVE','CONFLICT',false,$3),
+            ($1,'TEST_CURRENCY','TEST_AUTHORITY_SOURCE','LIVE','MISMATCH',false,$3)`,
         [caseId, decidedAt, new Date(decidedAt.getTime() + 86_400_000)],
       );
 

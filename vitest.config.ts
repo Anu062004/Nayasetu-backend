@@ -7,6 +7,7 @@ export default defineConfig({
     maxWorkers: 1,
     fileParallelism: false,
     include: ["tests/**/*.test.ts"],
+    setupFiles: ["dotenv/config"],
     testTimeout: 20_000,
     hookTimeout: 30_000,
     coverage: {

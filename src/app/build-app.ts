@@ -1,6 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyError, LogController } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -33,7 +36,7 @@ export async function buildApp(options: BuildAppOptions) {
   app.decorate("db", options.pool ?? createPool(options.config));
   app.decorateRequest("actor", undefined);
 
-  await app.register(helmet, { global: true });
+  await app.register(helmet, { contentSecurityPolicy: false, global: true });
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   await app.register(multipart, {
     limits: { files: 1, fileSize: 5 * 1024 * 1024, fields: 10 },
@@ -133,5 +136,26 @@ export async function buildApp(options: BuildAppOptions) {
 
   await registerHealthRoutes(app);
   await registerProductRoutes(app);
+
+  const frontendDist = path.resolve(process.cwd(), "frontend", "dist");
+  if (fs.existsSync(frontendDist)) {
+    await app.register(fastifyStatic, {
+      root: frontendDist,
+      prefix: "/",
+    });
+    app.setNotFoundHandler((request, reply) => {
+      if (request.raw.url?.startsWith("/v1/") || request.raw.url?.startsWith("/health")) {
+        return reply.code(404).send({
+          error: {
+            code: "NOT_FOUND",
+            message: "Route not found",
+            requestId: request.id,
+          },
+        });
+      }
+      return reply.sendFile("index.html");
+    });
+  }
+
   return app;
 }

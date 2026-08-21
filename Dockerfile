@@ -1,23 +1,40 @@
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY tsconfig.json tsconfig.build.json biome.json ./
-COPY src ./src
-COPY scripts ./scripts
-COPY db ./db
-RUN npm run build
+FROM node:22-alpine AS builder
 
-FROM node:22-alpine AS runtime
-ENV NODE_ENV=production
 WORKDIR /app
-RUN addgroup -S app && adduser -S app -G app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
-COPY scripts ./scripts
-COPY db ./db
-COPY config ./config
-USER app
+
+# Copy root and frontend package files for layer caching
+COPY package*.json ./
+COPY frontend/package*.json ./frontend/
+
+# Install root dependencies
+RUN npm ci
+
+# Install frontend dependencies
+RUN cd frontend && npm ci
+
+# Copy full source
+COPY . .
+
+# Build frontend and backend
+RUN cd frontend && npm run build
+RUN npm run build:backend
+
+# Production image
+FROM node:22-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+COPY package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/db ./db
+
 EXPOSE 3000
-CMD ["node", "dist/bin/api.js"]
+
+CMD ["node", "scripts/start-production.js"]

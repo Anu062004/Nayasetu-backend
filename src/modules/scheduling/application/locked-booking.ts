@@ -10,6 +10,7 @@ export interface LockedBooking {
   allocationId: string;
   citizenUserId: string;
   rosterId: string | null;
+  createdAt: Date | null;
 }
 
 export class BookingNotFoundError extends Error {
@@ -30,7 +31,7 @@ export async function lockBooking(client: PoolClient, bookingId: string): Promis
     citizen_user_id: string;
     roster_id: string | null;
   }>(
-    `SELECT b.id, b.status, b.provider_id, p.user_id AS provider_user_id,
+    `SELECT b.id, b.status, b.provider_id, b.created_at, p.user_id AS provider_user_id,
             a.id AS allocation_id, a.status AS allocation_status, a.roster_id, n.citizen_user_id
      FROM booking b JOIN provider p ON p.id = b.provider_id
      JOIN allocation a ON a.id = b.allocation_id
@@ -52,6 +53,7 @@ export async function lockBooking(client: PoolClient, bookingId: string): Promis
     allocationId: row.allocation_id,
     citizenUserId: row.citizen_user_id,
     rosterId: row.roster_id,
+    createdAt: (row as { created_at?: Date }).created_at ?? null,
   };
 }
 
