@@ -39,7 +39,7 @@ export async function buildApp(options: BuildAppOptions) {
     limits: { files: 1, fileSize: 5 * 1024 * 1024, fields: 10 },
   });
 
-  const profileCompletionPath = "/v1/me/profile";
+  const profileCompletionPaths = new Set(["/v1/me/profile", "/v1/me"]);
   app.addHook("onRequest", async (request) => {
     request.actor = await resolveActorFromRequest(request, options.config, app.db);
     const actor = request.actor;
@@ -47,7 +47,7 @@ export async function buildApp(options: BuildAppOptions) {
       actor?.actorType === "CITIZEN" &&
       actor.accountStatus !== undefined &&
       actor.accountStatus !== "ACTIVE" &&
-      new URL(request.url, "http://localhost").pathname !== profileCompletionPath
+      !profileCompletionPaths.has(new URL(request.url, "http://localhost").pathname)
     ) {
       throw new AppError(
         403,

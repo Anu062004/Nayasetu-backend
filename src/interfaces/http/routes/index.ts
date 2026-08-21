@@ -5,6 +5,7 @@ import { registerGoogleAuthRoutes } from "./google-auth.js";
 import { registerIdentityProviderRoutes } from "./identity-provider.js";
 import { registerIntakeAllocationRoutes } from "./intake-allocation.js";
 import { registerLedgerSettlementRoutes } from "./ledger-settlement.js";
+import { registerMeRoute } from "./me.js";
 import { registerSchedulingMatterRoutes } from "./scheduling-matter.js";
 
 export async function registerProductRoutes(app: FastifyInstance): Promise<void> {
@@ -14,5 +15,6 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
   await registerIntakeAllocationRoutes(app);
   await registerSchedulingMatterRoutes(app);
   await registerLedgerSettlementRoutes(app);
+  await registerMeRoute(app);
   await registerConductInstitutionalRoutes(app);
 }
