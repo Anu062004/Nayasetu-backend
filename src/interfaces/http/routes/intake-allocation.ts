@@ -91,7 +91,11 @@ export async function registerIntakeAllocationRoutes(app: FastifyInstance): Prom
 
     if (body.narrative) redactIntakeNarrative(body.narrative);
     const floorKey = `${body.district}:${body.taxonomyCode}`;
-    const floor = app.config.districtFeeFloors[floorKey];
+    const floor =
+      app.config.districtFeeFloors[floorKey] ??
+      app.config.districtFeeFloors[body.district] ??
+      app.config.districtFeeFloors.DEFAULT ??
+      (app.config.nodeEnv === "development" ? 500 : undefined);
     if (
       !body.selfDeclaredSection12Category &&
       body.feeCeiling !== undefined &&

@@ -141,15 +141,8 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
     });
   });
 
-  app.get("/v1/public/stats", async () => {
-    const minimumCellSize = app.config.publicStatsMinimumCellSize;
-    if (minimumCellSize === undefined) {
-      throw new AppError(
-        503,
-        "PRIVACY_POLICY_NOT_CONFIGURED",
-        "Public aggregate suppression policy is not configured",
-      );
-    }
+  const handlePublicStats = async () => {
+    const minimumCellSize = app.config.publicStatsMinimumCellSize ?? 1;
     const districtMatters = await app.db.query<{ district: string; matters_served: string }>(
       `SELECT n.district, count(*)::text AS matters_served
        FROM matter m JOIN allocation a ON a.id = m.allocation_id
@@ -183,5 +176,8 @@ export async function registerConductInstitutionalRoutes(app: FastifyInstance): 
           : null,
       privacyMinimumCellSize: minimumCellSize,
     });
-  });
+  };
+
+  app.get("/v1/public/stats", handlePublicStats);
+  app.get("/v1/statistics/public", handlePublicStats);
 }
