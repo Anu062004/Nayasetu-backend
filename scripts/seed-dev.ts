@@ -437,7 +437,10 @@ try {
            VALUES ($1, $2, $3, $4, 'OPEN')`,
           [matterId, allocId, activeProviderId, citizenUserId],
         );
-        await client.query("UPDATE matter SET status = 'CLOSED' WHERE id = $1", [matterId]);
+        await client.query(
+          "UPDATE matter SET status = 'CLOSED', closed_at = now(), close_reason = 'RESOLVED' WHERE id = $1",
+          [matterId],
+        );
       }
     }
   }
