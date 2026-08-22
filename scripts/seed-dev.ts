@@ -470,12 +470,31 @@ try {
   }
 
   // 7. Seed Disciplinary Grievances for Institutional Oversight Demo
-  await client.query(
-    `INSERT INTO grievance(complainant_user_id, subject_provider_id, category, status)
-     VALUES ($1, $2, 'UNEXCUSED_NON_APPEARANCE', 'PLATFORM_RESOLVED'),
-            ($1, $2, 'FEE_DEMAND_MISMATCH', 'REFERRED_TO_DLSA')`,
+  const existingGrievances = await client.query(
+    "SELECT 1 FROM grievance WHERE complainant_user_id = $1 AND subject_provider_id = $2",
     [citizenUserId, activeProviderId],
   );
+  if (!existingGrievances.rowCount) {
+    const gr1 = await client.query(
+      `INSERT INTO grievance(complainant_user_id, subject_provider_id, category, status)
+       VALUES ($1, $2, 'UNEXCUSED_NON_APPEARANCE', 'OPEN')
+       RETURNING id`,
+      [citizenUserId, activeProviderId],
+    );
+    await client.query("UPDATE grievance SET status = 'PLATFORM_RESOLVED' WHERE id = $1", [
+      gr1.rows[0].id,
+    ]);
+
+    const gr2 = await client.query(
+      `INSERT INTO grievance(complainant_user_id, subject_provider_id, category, status)
+       VALUES ($1, $2, 'FEE_DEMAND_MISMATCH', 'OPEN')
+       RETURNING id`,
+      [citizenUserId, activeProviderId],
+    );
+    await client.query("UPDATE grievance SET status = 'REFERRED_TO_DLSA' WHERE id = $1", [
+      gr2.rows[0].id,
+    ]);
+  }
 
   await client.query("COMMIT");
   process.stdout.write(
