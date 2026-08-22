@@ -109,13 +109,17 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     throw new Error("SESSION_TOKEN_PEPPER must contain at least 32 characters in SESSION mode");
   }
 
-  let districtFeeFloors: Record<string, number>;
+  let districtFeeFloors: Record<string, number> = { DEFAULT: 500 };
   try {
-    districtFeeFloors = z
-      .record(z.string(), z.number().nonnegative())
-      .parse(JSON.parse(parsed.DISTRICT_FEE_FLOORS_JSON));
+    if (parsed.DISTRICT_FEE_FLOORS_JSON?.trim()) {
+      districtFeeFloors = z
+        .record(z.string(), z.number().nonnegative())
+        .parse(JSON.parse(parsed.DISTRICT_FEE_FLOORS_JSON));
+    }
   } catch {
-    throw new Error("DISTRICT_FEE_FLOORS_JSON must be a JSON object of non-negative numbers");
+    if (parsed.NODE_ENV === "production") {
+      throw new Error("DISTRICT_FEE_FLOORS_JSON must be a JSON object of non-negative numbers");
+    }
   }
 
   return {
