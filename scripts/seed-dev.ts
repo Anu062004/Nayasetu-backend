@@ -419,10 +419,12 @@ try {
         bookingId,
       ]);
       if (!existingBooking.rowCount) {
+        const slotStart = new Date(1767225600000 + histIdx * 3600000).toISOString();
+        const slotEnd = new Date(1767225600000 + (histIdx + 1) * 3600000).toISOString();
         await client.query(
           `INSERT INTO booking(id, need_request_id, allocation_id, provider_id, citizen_user_id, slot, status)
-           VALUES ($1, $2, $3, $4, $5, tstzrange('2026-01-10T08:00:00Z', '2026-01-10T09:00:00Z', '[)'), 'HELD')`,
-          [bookingId, needId, allocId, activeProviderId, citizenUserId],
+           VALUES ($1, $2, $3, $4, $5, tstzrange($6, $7, '[)'), 'HELD')`,
+          [bookingId, needId, allocId, activeProviderId, citizenUserId, slotStart, slotEnd],
         );
         await client.query(
           "UPDATE booking SET status = 'CONFIRMED', updated_at = now() WHERE id = $1",
