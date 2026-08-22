@@ -6,6 +6,20 @@ export interface DemoPresetItem {
   category?: string;
 }
 
+export interface ProBonoOpportunity {
+  id: string;
+  needRequestId: string;
+  categoryTitle: string;
+  taxonomyCode: string;
+  applicantType: string;
+  district: string;
+  language: string;
+  urgency: string;
+  creditsReward: number;
+  description: string;
+  postedTime: string;
+}
+
 export const DEMO_PERSONAS = [
   { id: '00000000-0000-4000-8000-000000000001', role: 'CITIZEN' as const, label: 'Aarav Mehta (Citizen Seeking Aid)', desc: 'Bengaluru Urban' },
   { id: '00000000-0000-4000-8000-000000000002', role: 'PROVIDER' as const, label: 'Adv. Ananya Sharma (Demo Advocate)', desc: 'Bengaluru Urban (45 Pro Bono Credits)' },
@@ -48,4 +62,59 @@ export const DEMO_CONSENTS: DemoPresetItem[] = [
   { id: 'CONSENT-DLSA-2026-001', label: 'CONSENT-DLSA-2026-001', sublabel: 'Karnataka DLSA Statutory Standing Audit Order' },
   { id: 'CONSENT-BCI-2026-002', label: 'CONSENT-BCI-2026-002', sublabel: 'Bar Council of India Professional Conduct Inquiry' },
   { id: 'CONSENT-NALSA-2026-003', label: 'CONSENT-NALSA-2026-003', sublabel: 'National Legal Aid Quality Inspection Order' },
+];
+
+export const PRO_BONO_OPPORTUNITIES: ProBonoOpportunity[] = [
+  {
+    id: 'PB-CASE-001',
+    needRequestId: '00000000-0000-4000-8000-000000000004',
+    categoryTitle: 'Land & Tenancy Rights Protection',
+    taxonomyCode: 'CIVIL_PROPERTY_DISPUTE',
+    applicantType: 'Senior Citizen Tenant (§12 Eligible)',
+    district: 'Bengaluru Urban',
+    language: 'Kannada / English',
+    urgency: 'HIGH',
+    creditsReward: 15,
+    description: 'Statutory eviction defense for senior citizen tenant facing unlawful dispossession without due process.',
+    postedTime: '2 hours ago',
+  },
+  {
+    id: 'PB-CASE-002',
+    needRequestId: '00000000-0000-4000-8000-000000000005',
+    categoryTitle: 'Unpaid Industrial Wages Representation',
+    taxonomyCode: 'LABOUR_WAGES_DISPUTE',
+    applicantType: 'Industrial Workman / Factory Operative',
+    district: 'Delhi Central',
+    language: 'Hindi / English',
+    urgency: 'CRITICAL',
+    creditsReward: 15,
+    description: 'Representation before Labour Commissioner for recovery of 4 months pending statutory wages.',
+    postedTime: '4 hours ago',
+  },
+  {
+    id: 'PB-CASE-003',
+    needRequestId: '00000000-0000-4000-8000-000000000006',
+    categoryTitle: 'Interim Family Maintenance Defense',
+    taxonomyCode: 'FAMILY_MAINTENANCE',
+    applicantType: 'Single Mother / DLSA Voucher Beneficiary',
+    district: 'Pune',
+    language: 'Marathi / English',
+    urgency: 'STANDARD',
+    creditsReward: 15,
+    description: 'Section 125 CrPC application for child educational maintenance and medical expenses support.',
+    postedTime: '1 day ago',
+  },
+  {
+    id: 'PB-CASE-004',
+    needRequestId: '00000000-0000-4000-8000-000000000007',
+    categoryTitle: 'Consumer Warranty Fraud & Misleading Practice',
+    taxonomyCode: 'CONSUMER_DISPUTE',
+    applicantType: 'Agricultural Micro-Enterprise',
+    district: 'Mumbai Suburban',
+    language: 'Marathi / Hindi',
+    urgency: 'STANDARD',
+    creditsReward: 10,
+    description: 'Consumer Forum representation regarding defective irrigation pump supply and false warranty refusal.',
+    postedTime: '2 days ago',
+  },
 ];
