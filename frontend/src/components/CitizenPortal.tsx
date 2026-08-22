@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, type ActorContextState } from '../api/client';
+import { DEMO_CITIZENS } from '../api/demoPresets';
 
 interface CitizenPortalProps {
   actor: ActorContextState;
@@ -212,6 +213,25 @@ export const CitizenPortal: React.FC<CitizenPortalProps> = ({ actor }) => {
 
         <form onSubmit={handleSubmitNeed} className="space-y-8">
           
+          {/* Citizen Account Selector */}
+          <div className="p-4 bg-[#efedf0] rounded-2xl border border-[#e3e2e4] space-y-2">
+            <label className="field-label flex justify-between items-center text-xs">
+              <span>Citizen Applicant Persona</span>
+              <span className="font-mono text-[10px] text-[#B45309] font-bold">{formData.citizenUserId}</span>
+            </label>
+            <select
+              className="legal-input bg-white text-xs font-semibold"
+              value={formData.citizenUserId}
+              onChange={(e) => setFormData({ ...formData, citizenUserId: e.target.value })}
+            >
+              {DEMO_CITIZENS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} &bull; {c.sublabel}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Fieldset 1: Category Selection */}
           <div className="space-y-3">
             <div className="flex justify-between items-center">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api, type ActorContextState } from '../api/client';
+import { DEMO_PROVIDERS, DEMO_CONSENTS } from '../api/demoPresets';
 
 interface InstitutionalPortalProps {
   actor: ActorContextState;
@@ -204,14 +205,21 @@ export const InstitutionalPortal: React.FC<InstitutionalPortalProps> = ({ actor 
               </div>
 
               <div>
-                <label className="field-label">Subject Advocate Identification</label>
-                <input
-                  type="text"
+                <label className="field-label flex justify-between items-center">
+                  <span>Subject Advocate / Helper Identification</span>
+                  <span className="text-[10px] text-[#ba1a1a] font-mono">{grievanceForm.subjectProviderId}</span>
+                </label>
+                <select
                   className="legal-input"
                   value={grievanceForm.subjectProviderId}
                   onChange={(e) => setGrievanceForm({ ...grievanceForm, subjectProviderId: e.target.value })}
-                  required
-                />
+                >
+                  {DEMO_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} &bull; {p.sublabel}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -268,25 +276,39 @@ export const InstitutionalPortal: React.FC<InstitutionalPortalProps> = ({ actor 
             <form onSubmit={handleInspectRecord} className="space-y-4">
               
               <div>
-                <label className="field-label">Advocate Identification Code</label>
-                <input
-                  type="text"
+                <label className="field-label flex justify-between items-center">
+                  <span>Advocate Identification Code</span>
+                  <span className="text-[10px] text-[#00152a] font-mono">{inspectProviderId}</span>
+                </label>
+                <select
                   className="legal-input"
                   value={inspectProviderId}
                   onChange={(e) => setInspectProviderId(e.target.value)}
-                  required
-                />
+                >
+                  {DEMO_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} &bull; {p.sublabel}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="field-label">Statutory Authority Consent Order</label>
-                <input
-                  type="text"
-                  className="legal-input font-mono"
+                <label className="field-label flex justify-between items-center">
+                  <span>Statutory Authority Consent Order</span>
+                  <span className="text-[10px] text-[#00152a] font-mono">{inspectConsentRef}</span>
+                </label>
+                <select
+                  className="legal-input"
                   value={inspectConsentRef}
                   onChange={(e) => setInspectConsentRef(e.target.value)}
-                  required
-                />
+                >
+                  {DEMO_CONSENTS.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} &bull; {c.sublabel}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button

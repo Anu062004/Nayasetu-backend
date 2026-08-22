@@ -117,18 +117,23 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, actor, 
           <div className="hidden sm:flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-[#e3e2e4] shadow-sm">
             <span className="material-symbols-outlined text-[18px] text-[#904d00]">badge</span>
             <div className="flex flex-col text-left">
-              <span className="text-[9px] uppercase font-bold text-[#43474d] tracking-wider leading-tight">
-                Role Context
-              </span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[9px] uppercase font-bold text-[#43474d] tracking-wider leading-tight">
+                  Active Persona
+                </span>
+                <span className="text-[9px] font-mono text-[#B45309] font-bold">
+                  ID: {actor.actorId.slice(-4)}
+                </span>
+              </div>
               <select
                 value={actor.role}
                 onChange={(e) => handleRoleChange(e.target.value as Role)}
-                className="bg-transparent border-none text-xs font-bold text-[#00152a] p-0 pr-4 cursor-pointer focus:ring-0 outline-none truncate max-w-[140px]"
+                className="bg-transparent border-none text-xs font-bold text-[#00152a] p-0 pr-4 cursor-pointer focus:ring-0 outline-none truncate max-w-[180px]"
               >
-                <option value="CITIZEN">Citizen (Seeking Aid)</option>
-                <option value="PROVIDER">Advocate (Helper)</option>
-                <option value="OPERATOR">Nyaya Mitra (Volunteer)</option>
-                <option value="INSTITUTION">DLSA Official (Authority)</option>
+                <option value="CITIZEN">Aarav Mehta (Citizen Seeking Aid)</option>
+                <option value="PROVIDER">Adv. Ananya Sharma (Advocate)</option>
+                <option value="OPERATOR">Shri Ramesh Patel (Nyaya Mitra)</option>
+                <option value="INSTITUTION">Karnataka DLSA (Authority)</option>
                 <option value="ADMIN">System Administrator</option>
               </select>
             </div>

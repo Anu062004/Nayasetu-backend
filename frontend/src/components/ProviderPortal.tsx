@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, type ActorContextState } from '../api/client';
+import { DEMO_MATTERS, DEMO_BOOKINGS, DEMO_PROVIDERS } from '../api/demoPresets';
 
 interface ProviderPortalProps {
   actor: ActorContextState;
@@ -569,14 +570,21 @@ export const ProviderPortal: React.FC<ProviderPortalProps> = ({ actor }) => {
             <form onSubmit={handleCreateQuote} className="space-y-4">
               
               <div>
-                <label className="field-label">Matter / Case Reference</label>
-                <input
-                  type="text"
+                <label className="field-label flex justify-between items-center">
+                  <span>Matter / Case Reference</span>
+                  <span className="text-[10px] text-[#B45309] font-mono">{quoteForm.matterId}</span>
+                </label>
+                <select
                   className="legal-input"
                   value={quoteForm.matterId}
                   onChange={(e) => setQuoteForm({ ...quoteForm, matterId: e.target.value })}
-                  required
-                />
+                >
+                  {DEMO_MATTERS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} &bull; {m.sublabel}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -665,13 +673,21 @@ export const ProviderPortal: React.FC<ProviderPortalProps> = ({ actor }) => {
 
             <div className="space-y-4">
               <div>
-                <label className="field-label">Booking Request Reference</label>
-                <input
-                  type="text"
+                <label className="field-label flex justify-between items-center">
+                  <span>Booking Request Reference</span>
+                  <span className="text-[10px] text-[#904d00] font-mono">{bookingId}</span>
+                </label>
+                <select
                   className="legal-input"
                   value={bookingId}
                   onChange={(e) => setBookingId(e.target.value)}
-                />
+                >
+                  {DEMO_BOOKINGS.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label} &bull; {b.sublabel}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
