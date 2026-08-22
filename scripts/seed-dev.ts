@@ -481,6 +481,7 @@ try {
        RETURNING id`,
       [citizenUserId, activeProviderId],
     );
+    await client.query("UPDATE grievance SET status = 'TRIAGED' WHERE id = $1", [gr1.rows[0].id]);
     await client.query("UPDATE grievance SET status = 'PLATFORM_RESOLVED' WHERE id = $1", [
       gr1.rows[0].id,
     ]);
@@ -491,6 +492,7 @@ try {
        RETURNING id`,
       [citizenUserId, activeProviderId],
     );
+    await client.query("UPDATE grievance SET status = 'TRIAGED' WHERE id = $1", [gr2.rows[0].id]);
     await client.query("UPDATE grievance SET status = 'REFERRED_TO_DLSA' WHERE id = $1", [
       gr2.rows[0].id,
     ]);
