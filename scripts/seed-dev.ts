@@ -53,6 +53,26 @@ try {
       role: "PROVIDER",
       email: "docwriter@nyayasetu.local",
     },
+    {
+      id: "00000000-0000-4000-8000-000000000016",
+      role: "PROVIDER",
+      email: "advocate.delhi@nyayasetu.local",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000017",
+      role: "PROVIDER",
+      email: "advocate.mumbai@nyayasetu.local",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000018",
+      role: "PROVIDER",
+      email: "mediator.pune@nyayasetu.local",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000019",
+      role: "PROVIDER",
+      email: "notary.pune@nyayasetu.local",
+    },
   ];
 
   for (const user of users) {
@@ -71,7 +91,7 @@ try {
     );
   }
 
-  // 2. Seed verified profiles across all 5 legal service provider categories
+  // 2. Seed verified profiles across all 5 legal service provider categories & multiple cities
   const providerProfiles = [
     {
       id: "00000000-0000-4000-8000-000000000020",
@@ -90,6 +110,34 @@ try {
       ],
     },
     {
+      id: "00000000-0000-4000-8000-000000000026",
+      userId: "00000000-0000-4000-8000-000000000016",
+      type: "ADVOCATE",
+      name: "Adv. Vikramaditya Sen (High Court Panelist)",
+      district: "Delhi Central",
+      state: "Delhi",
+      languages: ["English", "Hindi", "Punjabi"],
+      services: [
+        { code: "CRIMINAL_BAIL_DEFENSE", min: 2500, max: 6000, proBono: true },
+        { code: "CIVIL_PROPERTY_DISPUTE", min: 2000, max: 5000, proBono: true },
+        { code: "CONSUMER_DISPUTE", min: 1500, max: 3500, proBono: true },
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000027",
+      userId: "00000000-0000-4000-8000-000000000017",
+      type: "ADVOCATE",
+      name: "Adv. Priya Deshmukh (Civil & Commercial)",
+      district: "Mumbai Suburban",
+      state: "Maharashtra",
+      languages: ["English", "Hindi", "Marathi"],
+      services: [
+        { code: "CIVIL_PROPERTY_DISPUTE", min: 2000, max: 4500, proBono: true },
+        { code: "LABOUR_WAGES_DISPUTE", min: 1800, max: 4000, proBono: true },
+        { code: "FAMILY_MAINTENANCE", min: 1500, max: 3500, proBono: true },
+      ],
+    },
+    {
       id: "00000000-0000-4000-8000-000000000022",
       userId: "00000000-0000-4000-8000-000000000012",
       type: "MEDIATOR",
@@ -101,6 +149,19 @@ try {
         { code: "FAMILY_MAINTENANCE", min: 800, max: 2000, proBono: true },
         { code: "CIVIL_PROPERTY_DISPUTE", min: 1200, max: 2800, proBono: true },
         { code: "CONSUMER_DISPUTE", min: 750, max: 1800, proBono: true },
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000028",
+      userId: "00000000-0000-4000-8000-000000000018",
+      type: "MEDIATOR",
+      name: "Smt. Shalini Kulkarni (Family Conciliator)",
+      district: "Pune",
+      state: "Maharashtra",
+      languages: ["English", "Hindi", "Marathi"],
+      services: [
+        { code: "FAMILY_MAINTENANCE", min: 900, max: 2200, proBono: true },
+        { code: "CONSUMER_DISPUTE", min: 800, max: 1800, proBono: true },
       ],
     },
     {
@@ -129,6 +190,19 @@ try {
         { code: "CIVIL_PROPERTY_DISPUTE", min: 300, max: 800, proBono: true },
         { code: "CIVIL_GENERAL", min: 200, max: 600, proBono: true },
         { code: "FAMILY_MAINTENANCE", min: 250, max: 700, proBono: true },
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000029",
+      userId: "00000000-0000-4000-8000-000000000019",
+      type: "NOTARY",
+      name: "Shri Sanjay Gokhale (Notary & Oath Commissioner)",
+      district: "Pune",
+      state: "Maharashtra",
+      languages: ["English", "Hindi", "Marathi"],
+      services: [
+        { code: "CIVIL_PROPERTY_DISPUTE", min: 350, max: 850, proBono: true },
+        { code: "CIVIL_GENERAL", min: 250, max: 650, proBono: true },
       ],
     },
     {
@@ -200,7 +274,7 @@ try {
     );
   }
 
-  // 3. Seed demonstration matter for direct fee quote generation
+  // 3. Seed demonstration matters for direct fee quote generation & consultation queue
   const activeProviderId = "00000000-0000-4000-8000-000000000020";
   const citizenUserId = "00000000-0000-4000-8000-000000000001";
   const sampleNeedId = "00000000-0000-4000-8000-000000000010";
@@ -258,7 +332,7 @@ try {
   // 4. Seed a pending HELD booking (for Booking Action Center demo)
   await client.query(
     `INSERT INTO need_request(id, citizen_user_id, taxonomy_code, district, language, mode_pref, urgency, channel)
-     VALUES ($1, $2, 'CIVIL_PROPERTY_DISPUTE', 'Bengaluru Urban', 'English', 'HYBRID', 'STANDARD', 'WEB')
+     VALUES ($1, $2, 'FAMILY_MAINTENANCE', 'Bengaluru Urban', 'English', 'HYBRID', 'STANDARD', 'WEB')
      ON CONFLICT (id) DO NOTHING`,
     [samplePendingNeedId, citizenUserId],
   );
@@ -299,6 +373,84 @@ try {
       ],
     );
   }
+
+  // 5. Seed closed matters across districts to populate Public Impact Statistics
+  const historicalDistricts = [
+    { district: "Bengaluru Urban", count: 42 },
+    { district: "Delhi Central", count: 35 },
+    { district: "Mumbai Suburban", count: 28 },
+    { district: "Pune", count: 19 },
+  ];
+
+  let histIdx = 100;
+  for (const item of historicalDistricts) {
+    for (let i = 0; i < item.count; i++) {
+      histIdx++;
+      const needId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
+      histIdx++;
+      const allocId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
+      histIdx++;
+      const matterId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
+
+      await client.query(
+        `INSERT INTO need_request(id, citizen_user_id, taxonomy_code, district, language, mode_pref, urgency, channel)
+         VALUES ($1, $2, 'CIVIL_PROPERTY_DISPUTE', $3, 'English', 'HYBRID', 'STANDARD', 'WEB')
+         ON CONFLICT (id) DO NOTHING`,
+        [needId, citizenUserId, item.district],
+      );
+
+      await client.query(
+        `INSERT INTO eligibility_decision(need_request_id, self_declared, route)
+         VALUES ($1, false, 'PAID')
+         ON CONFLICT (need_request_id) DO NOTHING`,
+        [needId],
+      );
+
+      await client.query(
+        `INSERT INTO allocation(id, need_request_id, provider_id, mode, seed, decided_by)
+         VALUES ($1, $2, $3, 'CITIZEN_CHOICE', $4, $5)
+         ON CONFLICT (id) DO NOTHING`,
+        [allocId, needId, activeProviderId, needId, citizenUserId],
+      );
+
+      await client.query(
+        `INSERT INTO matter(id, allocation_id, provider_id, citizen_user_id, status)
+         VALUES ($1, $2, $3, $4, 'CLOSED')
+         ON CONFLICT (id) DO NOTHING`,
+        [matterId, allocId, activeProviderId, citizenUserId],
+      );
+    }
+  }
+
+  // 6. Seed Pro Bono Credit History for Adv. Ananya Sharma via append_credit_event
+  const hasCredits = await client.query(
+    "SELECT total_credits FROM credit_balance WHERE provider_id = $1",
+    [activeProviderId],
+  );
+  if (Number(hasCredits.rows[0]?.total_credits ?? 0) === 0) {
+    const proBonoEvents = [
+      { units: 15, credits: 15, ref: "DLSA-LOK-ADALAT-BEN-2025-01" },
+      { units: 20, credits: 20, ref: "NALSA-WOMEN-MAINTENANCE-BEN-2025-04" },
+      { units: 10, credits: 10, ref: "SECTION-12-TENANT-DEFENSE-BEN-2026-02" },
+    ];
+    for (const ev of proBonoEvents) {
+      await client.query(
+        `SELECT public.append_credit_event(
+           $1, 'PRO_BONO_MATTER_CLOSED', $2, 'v1', $3, NULL, $4, now(),
+           'SYSTEM', '00000000-0000-4000-8000-000000000005', NULL, NULL, 'seed-demo'
+         )`,
+        [activeProviderId, ev.units, ev.credits, ev.ref],
+      );
+    }
+  }
+
+  // 7. Seed Disciplinary Grievances for Institutional Oversight Demo
+  await client.query(
+    `INSERT INTO grievance(complainant_user_id, subject_provider_id, category, status)
+     VALUES ($1, $2, 'UNEXCUSED_NON_APPEARANCE', 'PLATFORM_RESOLVED'),
+            ($1, $2, 'FEE_DEMAND_MISMATCH', 'REFERRED_TO_DLSA')`,
+    [citizenUserId, activeProviderId],
+  );
 
   await client.query("COMMIT");
   process.stdout.write(
