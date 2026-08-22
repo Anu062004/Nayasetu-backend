@@ -413,12 +413,18 @@ try {
         [allocId, needId, activeProviderId, needId, citizenUserId],
       );
 
-      await client.query(
-        `INSERT INTO matter(id, allocation_id, provider_id, citizen_user_id, status)
-         VALUES ($1, $2, $3, $4, 'CLOSED')
-         ON CONFLICT (id) DO NOTHING`,
-        [matterId, allocId, activeProviderId, citizenUserId],
-      );
+      const existingMatter = await client.query("SELECT 1 FROM matter WHERE id = $1", [matterId]);
+      if (!existingMatter.rowCount) {
+        await client.query(
+          `INSERT INTO matter(id, allocation_id, provider_id, citizen_user_id, status)
+           VALUES ($1, $2, $3, $4, 'OPEN')`,
+          [matterId, allocId, activeProviderId, citizenUserId],
+        );
+        await client.query(
+          "UPDATE matter SET status = 'CLOSED', updated_at = now() WHERE id = $1",
+          [matterId],
+        );
+      }
     }
   }
 
