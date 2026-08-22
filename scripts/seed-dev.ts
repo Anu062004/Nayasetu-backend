@@ -462,7 +462,7 @@ try {
       await client.query(
         `SELECT public.append_credit_event(
            $1, 'PRO_BONO_MATTER_CLOSED', $2, 'v1', $3, NULL, $4, now(),
-           'SYSTEM', '00000000-0000-4000-8000-000000000005', NULL, NULL, 'seed-demo'
+           'ADMIN', '00000000-0000-4000-8000-000000000005', NULL, NULL, 'seed-demo'
          )`,
         [activeProviderId, ev.units, ev.credits, ev.ref],
       );
