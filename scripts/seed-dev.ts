@@ -390,6 +390,8 @@ try {
       histIdx++;
       const allocId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
       histIdx++;
+      const bookingId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
+      histIdx++;
       const matterId = `00000000-0000-4000-8000-${String(histIdx).padStart(12, "0")}`;
 
       await client.query(
@@ -413,6 +415,21 @@ try {
         [allocId, needId, activeProviderId, needId, citizenUserId],
       );
 
+      const existingBooking = await client.query("SELECT 1 FROM booking WHERE id = $1", [
+        bookingId,
+      ]);
+      if (!existingBooking.rowCount) {
+        await client.query(
+          `INSERT INTO booking(id, need_request_id, allocation_id, provider_id, citizen_user_id, slot, status)
+           VALUES ($1, $2, $3, $4, $5, tstzrange('2026-01-10T08:00:00Z', '2026-01-10T09:00:00Z', '[)'), 'HELD')`,
+          [bookingId, needId, allocId, activeProviderId, citizenUserId],
+        );
+        await client.query(
+          "UPDATE booking SET status = 'CONFIRMED', updated_at = now() WHERE id = $1",
+          [bookingId],
+        );
+      }
+
       const existingMatter = await client.query("SELECT 1 FROM matter WHERE id = $1", [matterId]);
       if (!existingMatter.rowCount) {
         await client.query(
@@ -420,10 +437,7 @@ try {
            VALUES ($1, $2, $3, $4, 'OPEN')`,
           [matterId, allocId, activeProviderId, citizenUserId],
         );
-        await client.query(
-          "UPDATE matter SET status = 'CLOSED', updated_at = now() WHERE id = $1",
-          [matterId],
-        );
+        await client.query("UPDATE matter SET status = 'CLOSED' WHERE id = $1", [matterId]);
       }
     }
   }
